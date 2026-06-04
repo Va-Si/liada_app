@@ -3,14 +3,13 @@
   "short_name": "Liada",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#2563eb",
+  "background_color": "#ffffff",
+  "theme_color": "#FF3B30",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/128/1356/1356559.png",
+      "src": "https://cdn-icons-png.flaticon.com/512/1356/1356559.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     }
   ]
 }
