@@ -119,11 +119,19 @@
         .qty-item span { display: block; font-size: 0.8rem; color: var(--text-sec); margin-bottom: 5px; }
         .qty-item input { width: 60%; text-align: center; border: none; background: none; font-weight: bold; font-size: 1.2rem; color: var(--text-main);}
         .btn-telegram { color: white; background-color: #0088cc; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer; }
+        @keyframes pulse {
+                0% { opacity: 1; }
+                50% { opacity: 0.5; }
+                100% { opacity: 1; }
+            }
     </style>
 </head>
 <body data-theme="system">
 
 <div id="app-container">
+    <div id="app-loader" style="position: fixed; top:0; left:0; width:100%; height:100%; background-color: #f2f2f7; z-index: 9999; display: flex; align-items: center; justify-content: center;">
+    <div style="font-weight:bold; color: #2563eb; font-size: 1.2rem; animation: pulse 1.5s infinite;">Se sincronizează...</div>
+</div>
 
     <div id="page-main" class="page active">
         <div class="frozen-header" style="background-color: var(--liada-red);">
@@ -1149,18 +1157,46 @@
     }
 
     // --- INITIALIZARE GLOBALA SI SINCRONIZARE CACHE ---
-    document.addEventListener('DOMContentLoaded', () => {
-        setTheme('system');
-        renderSetariRetele();
-        renderSetariProprietati();
-        renderSetariCategorii();
-        incarcaSetariTimp();
-        
-        db.collection("sectoare").onSnapshot(s => { dbSectoare = {}; s.forEach(d => dbSectoare[d.id] = {id: d.id, ...d.data()}); renderListaSectoare(); renderToateExpirarile(); });
-        db.collection("magazine").onSnapshot(s => { dbMagazine = {}; s.forEach(d => dbMagazine[d.id] = {id: d.id, ...d.data()}); if(sectorCurentId) renderMagazineDinSector(); renderToateExpirarile(); });
-        db.collection("produse_magazin").onSnapshot(s => { dbProduse = {}; s.forEach(d => dbProduse[d.id] = {id: d.id, ...d.data()}); renderToateExpirarile(); });
-        db.collection("loturi").onSnapshot(s => { dbLoturi = {}; s.forEach(d => dbLoturi[d.id] = {id: d.id, ...d.data()}); renderToateExpirarile(); });
+ document.addEventListener('DOMContentLoaded', () => {
+    setTheme('system');
+    renderSetariRetele();
+    renderSetariProprietati();
+    renderSetariCategorii();
+    incarcaSetariTimp();
+    
+    // Lista de promise-uri pentru a ști când suntem gata
+    let loadedCount = 0;
+    const total = 4; // Avem 4 colecții principale
+
+    function checkReady() {
+        loadedCount++;
+        if (loadedCount === total) {
+            // Totul a fost încărcat, ascundem loader-ul
+            const loader = document.getElementById('app-loader');
+            if (loader) loader.style.display = 'none';
+        }
+    }
+
+    db.collection("sectoare").onSnapshot(s => { 
+        dbSectoare = {}; s.forEach(d => dbSectoare[d.id] = {id: d.id, ...d.data()}); 
+        renderListaSectoare(); renderToateExpirarile(); checkReady(); 
     });
+    
+    db.collection("magazine").onSnapshot(s => { 
+        dbMagazine = {}; s.forEach(d => dbMagazine[d.id] = {id: d.id, ...d.data()}); 
+        if(sectorCurentId) renderMagazineDinSector(); renderToateExpirarile(); checkReady(); 
+    });
+    
+    db.collection("produse_magazin").onSnapshot(s => { 
+        dbProduse = {}; s.forEach(d => dbProduse[d.id] = {id: d.id, ...d.data()}); 
+        renderToateExpirarile(); checkReady(); 
+    });
+    
+    db.collection("loturi").onSnapshot(s => { 
+        dbLoturi = {}; s.forEach(d => dbLoturi[d.id] = {id: d.id, ...d.data()}); 
+        renderToateExpirarile(); checkReady(); 
+    });
+});
 </script>
 </body>
 </html>
