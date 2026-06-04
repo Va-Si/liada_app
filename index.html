@@ -1,1 +1,1214 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIADA - Mercantizare</title>
 
+    <link rel="manifest" href="manifest.json">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/10.1.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.1.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        /* ================= TEMA ȘI CULORILE ================= */
+        :root {
+            --bg-color: #f2f2f7;
+            --surface-color: #ffffff;
+            --text-main: #1c1c1e;
+            --text-sec: #8e8e93;
+            --accent: #2563eb;
+            --danger: #ef4444;
+            --border: #c6c6c8;
+            --liada-red: rgba(255, 59, 48, 0.85);
+            --glass-bg: rgba(255, 255, 255, 0.8);
+        }
+
+        body[data-theme="dark"] {
+            --bg-color: #000000;
+            --surface-color: #1c1c1e;
+            --text-main: #ffffff;
+            --text-sec: #ebebf5;
+            --border: #38383a;
+            --glass-bg: rgba(28, 28, 30, 0.8);
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            transition: background-color 0.3s, color 0.3s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #app-container {
+            max-width: 600px;
+            margin: 0 auto;
+            min-height: 100vh;
+            background-color: var(--bg-color);
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        /* ================= NAVIGARE PAGINI ================= */
+        .page { display: none; padding-bottom: 100px; animation: fadeIn 0.2s ease-in-out; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ================= INSULA ÎNGHEȚATĂ (HEADERS) ================= */
+        .frozen-header {
+            position: sticky; top: 10px; margin: 10px; padding: 15px 20px; border-radius: 25px;
+            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            display: flex; flex-direction: column; gap: 10px; z-index: 100; box-shadow: 0 4px 15px rgba(0,0,0,0.1); color: white;
+        }
+        .header-top { display: flex; justify-content: space-between; align-items: center; }
+        .header-nav { display: flex; gap: 15px; justify-content: center; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 10px; }
+        .header-title { margin: 0; font-size: 1.6rem; font-weight: 800; }
+        .header-subtitle { margin: 0; font-size: 0.9rem; opacity: 0.9; }
+        .icon-btn { background: none; border: none; color: white; font-size: 1.3rem; cursor: pointer; padding: 5px; }
+
+        /* ================= CHENARE ȘI LISTE ================= */
+        .card { background-color: var(--surface-color); margin: 15px; padding: 15px; border-radius: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); position: relative; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 1.1rem; cursor: pointer; }
+        .card-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+        .card-row:last-child { border-bottom: none; }
+
+        .btn-action { background: none; border: none; color: var(--accent); font-size: 1.2rem; cursor: pointer; padding: 5px 10px; }
+        .btn-danger { color: var(--danger); cursor: pointer; background: none; border: none; font-size: 1.1rem; }
+
+        .input-field { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid var(--border); border-radius: 8px; background-color: var(--bg-color); color: var(--text-main); box-sizing: border-box; }
+
+        /* ================= BUTON FAB (+) ================= */
+        .fab { position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; border-radius: 30px; background-color: var(--glass-bg); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: var(--accent); border: 1px solid var(--border); font-size: 1.8rem; box-shadow: 0 4px 15px rgba(0,0,0,0.15); cursor: pointer; z-index: 99; display: flex; justify-content: center; align-items: center; }
+
+        /* ================= MODALE ȘI BUTOANE NOI ================= */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-overlay.active { display: flex; }
+        .modal-content { background-color: var(--surface-color); padding: 24px; border-radius: 24px; width: 85%; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); animation: scaleIn 0.2s; }
+        @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .modal-actions { display: flex; gap: 8px; padding-top: 15px; margin-top: 10px; }
+        
+        .btn-custom-cancel {
+            flex: 1; padding: 16px; font-weight: 900; color: #94a3b8; text-transform: uppercase; font-size: 0.75rem;
+            background: transparent; border-radius: 1rem; border: none; cursor: pointer; transition: 0.2s;
+        }
+        .btn-custom-cancel:hover { background-color: #f1f5f9; }
+        body[data-theme="dark"] .btn-custom-cancel:hover { background-color: #1e293b; }
+
+        .btn-custom-save {
+            flex: 2; padding: 16px; font-weight: 900; color: white; text-transform: uppercase; font-size: 0.75rem;
+            background-color: var(--accent); border-radius: 1rem; border: none; cursor: pointer; transition: 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .btn-custom-save:hover { background-color: #1d4ed8; }
+
+        .btn-custom-danger {
+            flex: 2; padding: 16px; font-weight: 900; color: white; text-transform: uppercase; font-size: 0.75rem;
+            background-color: var(--danger); border-radius: 1rem; border: none; cursor: pointer; transition: 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .btn-custom-danger:hover { background-color: #dc2626; }
+
+        /* ================= SPECIFICE PAGINA PRODUS ================= */
+        .qty-box { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .qty-item { background-color: var(--bg-color); padding: 10px; border-radius: 10px; text-align: center; border: 1px solid var(--border); }
+        .qty-item span { display: block; font-size: 0.8rem; color: var(--text-sec); margin-bottom: 5px; }
+        .qty-item input { width: 60%; text-align: center; border: none; background: none; font-weight: bold; font-size: 1.2rem; color: var(--text-main);}
+        .btn-telegram { color: white; background-color: #0088cc; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer; }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body data-theme="system">
+
+<div id="app-container">
+    
+    <div id="app-loader" style="position: fixed; top:0; left:0; width:100%; height:100%; background-color: var(--bg-color); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.3s ease;">
+        <img src="https://cdn-icons-png.flaticon.com/512/1356/1356559.png" alt="Liada Logo" style="width: 120px; height: 120px; animation: pulse 1.5s infinite; margin-bottom: 20px;">
+        <h1 style="font-weight: 900; color: var(--liada-red); font-size: 2.2rem; margin: 0; letter-spacing: 2px;">LIADA</h1>
+    </div>
+
+    <div id="page-main" class="page active">
+        <div class="frozen-header" style="background-color: var(--liada-red);">
+            <div class="header-top">
+                <h1 class="header-title">LIADA</h1>
+                <button class="icon-btn" onclick="goTo('page-settings')"><i class="fas fa-cog"></i></button>
+            </div>
+        </div>
+
+        <div id="sectors-list">
+            <div style="padding: 20px; text-align: center; color: var(--text-sec);">Se încarcă sectoarele din Firebase...</div>
+        </div>
+
+        <div class="card">
+            <div class="card-header" style="color: var(--danger); flex-wrap: wrap;">
+                <span style="margin-bottom:5px;"><i class="fas fa-exclamation-circle"></i> Expiră în curând</span>
+                <div style="display:flex; gap:5px; align-items:center;">
+                    <input type="number" min="1" id="val-exp-global" class="input-field" style="width:60px; margin:0; padding:2px 5px; font-size:0.9rem; text-align:center;" onchange="schimbaTimpExp('global')">
+                    <select id="unit-exp-global" class="input-field" style="width:auto; margin:0; padding:2px 5px; font-size:0.9rem;" onchange="schimbaTimpExp('global')">
+                        <option value="zile">Zile</option>
+                        <option value="saptamani">Săpt.</option>
+                        <option value="luni">Luni</option>
+                    </select>
+                </div>
+            </div>
+            <div id="expirari-globale-list"></div>
+        </div>
+
+        <button class="fab" onclick="showModal('modal-sector')"><i class="fas fa-plus"></i></button>
+    </div>
+
+    <div id="page-settings" class="page">
+        <div class="frozen-header" style="background-color: var(--glass-bg); color: var(--text-main); border: 1px solid var(--border);">
+            <div class="header-top">
+                <h2 class="header-title">Aspect Aplicație</h2>
+                <button class="icon-btn" style="color: var(--text-main);" onclick="goTo('page-main')"><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-row">
+                <span>Tema Aplicației</span>
+                <select class="input-field" style="width: auto;" onchange="setTheme(this.value)">
+                    <option value="system">Tema Sistem</option>
+                    <option value="light">Tema Albă</option>
+                    <option value="dark">Tema Neagră</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Rețea de magazine <button class="btn-action" onclick="showModal('modal-network')"><i class="fas fa-plus"></i></button></div>
+            <div id="lista-retele"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Detalii despre magazine <button class="btn-action" onclick="showModal('modal-property')"><i class="fas fa-plus"></i></button></div>
+            <div id="lista-proprietati"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Produse și Termen de Valabilitate <button class="btn-action" onclick="adaugaCategorieNoua()"><i class="fas fa-plus"></i></button></div>
+            <div id="lista-categorii-setari" style="margin-top: 10px;">
+                </div>
+        </div>
+    </div>
+
+    <div id="page-sector" class="page">
+        <div class="frozen-header" id="sector-header-color" style="background-color: #2E7D32;">
+            <div class="header-top">
+                <h2 class="header-title" id="sector-title-display">Nume Sector</h2>
+                <button class="icon-btn"><i class="fas fa-pen"></i></button>
+            </div>
+            <div class="header-nav">
+                <button class="icon-btn" onclick="goTo('page-main')"><i class="fas fa-home"></i></button>
+                <button class="icon-btn"><i class="fas fa-map-marker-alt"></i></button>
+                <button class="icon-btn"><i class="fas fa-building"></i></button>
+            </div>
+        </div>
+
+        <div id="stores-list"></div>
+
+        <div class="card">
+            <div class="card-header" style="color: var(--danger); flex-wrap: wrap;">
+                <span style="margin-bottom:5px;"><i class="fas fa-exclamation-circle"></i> Expiră în curând</span>
+                <div style="display:flex; gap:5px; align-items:center;">
+                    <input type="number" min="1" id="val-exp-sector" class="input-field" style="width:60px; margin:0; padding:2px 5px; font-size:0.9rem; text-align:center;" onchange="schimbaTimpExp('sector')">
+                    <select id="unit-exp-sector" class="input-field" style="width:auto; margin:0; padding:2px 5px; font-size:0.9rem;" onchange="schimbaTimpExp('sector')">
+                        <option value="zile">Zile</option>
+                        <option value="saptamani">Săpt.</option>
+                        <option value="luni">Luni</option>
+                    </select>
+                </div>
+            </div>
+            <div id="expirari-sector-list"></div>
+        </div>
+
+        <button class="fab" onclick="showModal('modal-store')"><i class="fas fa-plus"></i></button>
+    </div>
+
+    <div id="page-store" class="page">
+        <div class="frozen-header" id="store-header-color" style="background-color: #4CAF50;">
+            <div class="header-top">
+                <div>
+                    <h2 class="header-title" id="store-title-display">Nume Magazin</h2>
+                    <p class="header-subtitle" id="store-address-display">Adresa Magazin</p>
+                </div>
+                <button class="icon-btn"><i class="fas fa-pen"></i></button>
+            </div>
+            <div class="header-nav">
+                <button class="icon-btn" onclick="goTo('page-main')"><i class="fas fa-home"></i></button>
+                <button class="icon-btn" onclick="goTo('page-sector')"><i class="fas fa-arrow-left"></i></button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Detalii despre magazin</div>
+            <div id="store-properties-list"></div>
+        </div>
+
+        <div id="categories-list"></div>
+
+        <div class="card">
+            <div class="card-header" style="color: var(--danger); flex-wrap: wrap;">
+                <span style="margin-bottom:5px;"><i class="fas fa-exclamation-circle"></i> Expiră în curând</span>
+                <div style="display:flex; gap:5px; align-items:center;">
+                    <input type="number" min="1" id="val-exp-store" class="input-field" style="width:60px; margin:0; padding:2px 5px; font-size:0.9rem; text-align:center;" onchange="schimbaTimpExp('store')">
+                    <select id="unit-exp-store" class="input-field" style="width:auto; margin:0; padding:2px 5px; font-size:0.9rem;" onchange="schimbaTimpExp('store')">
+                        <option value="zile">Zile</option>
+                        <option value="saptamani">Săpt.</option>
+                        <option value="luni">Luni</option>
+                    </select>
+                </div>
+            </div>
+            <div id="expirari-store-list"></div>
+        </div>
+    </div>
+
+    <div id="page-product" class="page">
+        <div class="frozen-header" id="product-header-color" style="background-color: #4CAF50;">
+            <div class="header-top">
+                <div>
+                    <h2 class="header-title" id="product-title-display">Nume Produs</h2>
+                    <p class="header-subtitle" id="product-store-display">Magazin - Adresă</p>
+                </div>
+            </div>
+            <div class="header-nav">
+                <button class="icon-btn" onclick="goTo('page-main')"><i class="fas fa-home"></i></button>
+                <button class="icon-btn" onclick="goTo('page-store')"><i class="fas fa-arrow-left"></i></button>
+            </div>
+        </div>
+
+        <div class="card">
+            <textarea id="notite-input" class="input-field" placeholder="Notițe de făcut..." rows="2"></textarea>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Cantitatea</div>
+            <div class="card-row"><span>Depozit:</span> <input type="number" id="depozit-input" class="input-field" style="width: 50%; margin:0;"></div>
+            
+            <div class="qty-box">
+                <div class="qty-item">
+                    <span>Vitrină (Sumă loturi)</span>
+                    <div style="font-size: 1.4rem; font-weight: bold; color: var(--accent);" id="vitrina-total">0</div>
+                </div>
+                <div class="qty-item">
+                    <span>Stoc (Manual)</span>
+                    <div style="display:flex; align-items:center; justify-content:center; gap:5px;">
+                        <input type="number" id="stoc-manual" placeholder="0">
+                        <button class="btn-telegram" onclick="trimiteInSheets()"><i class="fas fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                Termen de valabilitate
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size: 0.7rem; color: var(--text-sec); font-weight:normal;" id="data-actualizare">Actualizat -</span>
+                    <button class="btn-action" onclick="deschideModalLot()"><i class="fas fa-plus"></i></button>
+                </div>
+            </div>
+            <div id="batches-list"></div>
+        </div>
+    </div>
+
+    <div id="modal-confirm" class="modal-overlay" style="z-index: 2000;">
+        <div class="modal-content" style="text-align: center;">
+            <h3 id="confirm-title" style="margin-top:0;">Confirmare</h3>
+            <p id="confirm-message" style="color: var(--text-sec); font-size: 0.9rem; margin-bottom: 10px;">Ești sigur?</p>
+            <div class="modal-actions">
+                <button type="button" class="btn-custom-cancel" onclick="inchideConfirmare()">Anulează</button>
+                <button type="button" class="btn-custom-danger" id="btn-executa-confirmare">Șterge</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-prompt" class="modal-overlay" style="z-index: 2000;">
+        <div class="modal-content">
+            <h3 id="prompt-title" style="margin-top:0;">Introducere Date</h3>
+            <input type="text" id="prompt-input" class="input-field" placeholder="...">
+            <div class="modal-actions">
+                <button type="button" class="btn-custom-cancel" onclick="inchidePrompt()">Anulează</button>
+                <button type="button" class="btn-custom-save" id="btn-executa-prompt">Salvează</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-sector" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="margin-top:0;">Adaugă Sector</h3>
+            <input type="text" class="input-field" id="new-sector-name" placeholder="Denumire Sector">
+            <input type="color" class="input-field" id="new-sector-color" value="#007aff" style="height: 40px; padding: 2px;">
+            <div class="modal-actions">
+                <button type="button" class="btn-custom-cancel" onclick="closeModal('modal-sector')">Anulează</button>
+                <button type="button" class="btn-custom-save" onclick="salveazaSector()">Salvează</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-store" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="margin-top:0;">Adaugă Magazin</h3>
+            <input type="text" class="input-field" id="new-store-name" placeholder="Nume Magazin (ex: Local 1)">
+            <input type="text" class="input-field" id="new-store-address" placeholder="Adresă (ex: Bd. Dacia 44)">
+            <select class="input-field" id="new-store-network"></select>
+            <div class="modal-actions">
+                <button type="button" class="btn-custom-cancel" onclick="closeModal('modal-store')">Anulează</button>
+                <button type="button" class="btn-custom-save" onclick="salveazaMagazin()">Salvează</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-network" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="margin-top:0;">Adaugă Rețea</h3>
+            <input type="text" id="new-network-name" class="input-field" placeholder="Nume rețea">
+            <input type="color" id="new-network-color" class="input-field" value="#007aff" style="height: 40px; padding: 2px;">
+            <div class="modal-actions">
+                <button type="button" class="btn-custom-cancel" onclick="closeModal('modal-network')">Anulează</button>
+                <button type="button" class="btn-custom-save" onclick="salveazaRetea()">Salvează</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-property" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="margin-top:0;">Adaugă Câmp Detalii</h3>
+            <input type="text" id="new-property-name" class="input-field" placeholder="Nume câmp (ex: Telefon)">
+            <div class="modal-actions">
+                <button type="button" class="btn-custom-cancel" onclick="closeModal('modal-property')">Anulează</button>
+                <button type="button" class="btn-custom-save" onclick="salveazaProprietate()">Salvează</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-add-product" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="modal-product-title" style="margin-top:0;">Adaugă Produs</h3>
+            <input type="hidden" id="new-product-category">
+
+            <div style="font-size: 0.9rem; color: var(--text-sec); margin-bottom: 5px;">Alege din catalog:</div>
+            <select class="input-field" id="new-product-select"></select>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-custom-cancel" onclick="closeModal('modal-add-product')">Anulează</button>
+                <button type="button" class="btn-custom-save" onclick="salveazaProdusInMagazin()">Salvează</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-batch" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="margin-top:0;">Adaugă Lot Nou</h3>
+            <input type="number" class="input-field" id="batch-qty" placeholder="Cantitate (opțional)">
+            <div style="display:flex; gap:10px; align-items:center;">
+                <input type="text" class="input-field" id="batch-date" placeholder="Data (ZZ.LL.AAAA)">
+                <input type="date" class="input-field" id="batch-date-picker" style="width: 40px; padding:5px;" onchange="formateazaData(this.value)">
+            </div>
+            <div id="batch-date-label" style="font-size: 0.8rem; color: var(--text-sec); margin-top: 5px; text-align: center;">Data Prod. (ZZ.LL.AAAA)</div>
+            
+            <div class="modal-actions">
+                <button type="button" class="btn-custom-cancel" onclick="closeModal('modal-batch')">Anulează</button>
+                <button type="button" class="btn-custom-save" onclick="adaugaLot()">Salvează</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // --- 1. CONFIGURARE FIREBASE ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyB7O1CAvbXloK379wXKwDY1SObgox7jf3U",
+        authDomain: "liada-f7c95.firebaseapp.com",
+        projectId: "liada-f7c95",
+        storageBucket: "liada-f7c95.firebasestorage.app",
+        messagingSenderId: "232514890985",
+        appId: "1:232514890985:web:b6914e6b79682a90ca9478"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    db.enablePersistence().catch(function(err) {
+        if (err.code == 'failed-precondition') {
+            console.warn("Offline funcționează doar într-un singur tab deschis odată.");
+        }
+    });
+
+    // --- 2. STRUCTURI DE BAZĂ DINAMICE ȘI CACHE GLOBAL ---
+    let defaultCatalog = {
+        "Maioneză - pachete": { termen: 180, unit: "zile", produse: ["🟢 De Casă 185g", "🟡 Provensal 185g", "🟢 De Casă 370g", "🟡 Provensal 370g", "🟢 De Casă 600g", "🟡 Provensal 600g", "🔴 De Elită 450g", "🔴 De Elită 650g", "🟤 Profi 370g"] },
+        "Maioneze - căldări": { termen: 120, unit: "zile", produse: ["🔵 Delicios 850ml", "🟢 De Casă 850ml", "🟡 Provensal 850ml", "🟢 De Casă 1.4l", "🟡 Provensal 1.4l", "🟡 Provensal 630g"] },
+        "Ketchup": { termen: 180, unit: "zile", produse: ["⚫ Chili 275g", "🟢 Frigărui 275g"] },
+        "Paste de tomat": { termen: 180, unit: "zile", produse: ["🔵 Tomate 70g", "🔵 Tomate 275g"] },
+        "Muștar": { termen: 120, unit: "zile", produse: ["🟡 Rusesc 200g"] },
+        "Oțet": { termen: 12, unit: "luni", produse: ["🟤 Acid Acetic de Mere 5%", "🟢 Acid Acetic 6%", "🟡 Acid Acetic 9%"] },
+        "Drojdii": { termen: 0, unit: "zile", produse: ["🟡 Secretul Bunicii 50g"] }
+    };
+    let catalogCategorii = JSON.parse(localStorage.getItem('catalogCategorii')) || defaultCatalog;
+    let reteleMagazine = JSON.parse(localStorage.getItem('reteleMagazine')) || [{ nume: 'Local', culoare: '#4CAF50' }, { nume: 'Linella', culoare: '#E53935' }];
+    let proprietatiMagazine = JSON.parse(localStorage.getItem('proprietatiMagazine')) || ['Manager'];
+
+    let magazinCurent = {};
+    let sectorCurentId = null;
+    let produsCurent = { id: null, nume: '', categorie: '' };
+    
+    let dbSectoare = {};
+    let dbMagazine = {};
+    let dbProduse = {};
+    let dbLoturi = {};
+
+    let unsubscribeProduseCurente = null;
+    let unsubscribeLoturiCurente = null;
+    let actiuneConfirmare = null;
+    let actiunePrompt = null;
+
+    // --- SISTEME DE MODALE PERSONALIZATE ---
+    function cereConfirmare(titlu, mesaj, callback) {
+        document.getElementById('confirm-title').innerText = titlu;
+        document.getElementById('confirm-message').innerText = mesaj;
+        actiuneConfirmare = callback;
+        showModal('modal-confirm');
+    }
+    function inchideConfirmare() { closeModal('modal-confirm'); actiuneConfirmare = null; }
+    document.getElementById('btn-executa-confirmare').addEventListener('click', () => {
+        if (actiuneConfirmare) actiuneConfirmare();
+        inchideConfirmare();
+    });
+
+    function arataPrompt(titlu, valoareInitiala, placeholder, callback) {
+        document.getElementById('prompt-title').innerText = titlu;
+        let input = document.getElementById('prompt-input');
+        input.value = valoareInitiala;
+        input.placeholder = placeholder;
+        actiunePrompt = callback;
+        showModal('modal-prompt');
+        setTimeout(() => input.focus(), 100);
+    }
+    function inchidePrompt() { closeModal('modal-prompt'); actiunePrompt = null; }
+    document.getElementById('btn-executa-prompt').addEventListener('click', () => {
+        let val = document.getElementById('prompt-input').value.trim();
+        if(actiunePrompt && val) actiunePrompt(val);
+        inchidePrompt();
+    });
+
+    // --- LOGICA PENTRU SETARI ---
+    function renderSetariRetele() {
+        const container = document.getElementById('lista-retele');
+        const selectStore = document.getElementById('new-store-network');
+        container.innerHTML = ''; selectStore.innerHTML = '';
+
+        reteleMagazine.forEach((r, index) => {
+            container.innerHTML += `
+                <div class="card-row">${r.nume} 
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="background: ${r.culoare}; width: 20px; height: 20px; border-radius: 50%;"></span>
+                        <button class="btn-danger" onclick="stergeRetea(${index})"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>`;
+            selectStore.innerHTML += `<option value="${r.nume}" data-color="${r.culoare}">${r.nume}</option>`;
+        });
+    }
+
+    function salveazaRetea() {
+        let n = document.getElementById('new-network-name').value;
+        let c = document.getElementById('new-network-color').value;
+        if(n) {
+            reteleMagazine.push({nume: n, culoare: c});
+            localStorage.setItem('reteleMagazine', JSON.stringify(reteleMagazine));
+            renderSetariRetele();
+            closeModal('modal-network');
+            document.getElementById('new-network-name').value = '';
+        }
+    }
+
+    function stergeRetea(index) {
+        cereConfirmare("Ștergere Rețea", "Ești sigur că vrei să ștergi această rețea de magazine?", () => {
+            reteleMagazine.splice(index, 1);
+            localStorage.setItem('reteleMagazine', JSON.stringify(reteleMagazine));
+            renderSetariRetele();
+        });
+    }
+
+    function renderSetariProprietati() {
+        const container = document.getElementById('lista-proprietati');
+        container.innerHTML = '';
+        proprietatiMagazine.forEach((p, index) => {
+            container.innerHTML += `
+                <div class="card-row">Property: ${p} 
+                    <button class="btn-danger" onclick="stergeProprietate(${index})"><i class="fas fa-trash"></i></button>
+                </div>`;
+        });
+    }
+
+    function salveazaProprietate() {
+        let n = document.getElementById('new-property-name').value;
+        if(n) {
+            proprietatiMagazine.push(n);
+            localStorage.setItem('proprietatiMagazine', JSON.stringify(proprietatiMagazine));
+            renderSetariProprietati();
+            closeModal('modal-property');
+            document.getElementById('new-property-name').value = '';
+        }
+    }
+
+    function stergeProprietate(index) {
+        cereConfirmare("Ștergere Câmp", "Ești sigur că vrei să ștergi acest câmp personalizat?", () => {
+            proprietatiMagazine.splice(index, 1);
+            localStorage.setItem('proprietatiMagazine', JSON.stringify(proprietatiMagazine));
+            renderSetariProprietati();
+        });
+    }
+
+    function deseneazaProprietatiInMagazin() {
+        const container = document.getElementById('store-properties-list');
+        container.innerHTML = '';
+        proprietatiMagazine.forEach(p => {
+            container.innerHTML += `
+            <div class="card-row">
+                <span>${p}:</span>
+                <input type="text" class="input-field" placeholder="${p}..." style="width: 60%; margin-top:0;">
+            </div>`;
+        });
+    }
+
+    function renderSetariCategorii() {
+        const container = document.getElementById('lista-categorii-setari');
+        container.innerHTML = '';
+        
+        for (let catName in catalogCategorii) {
+            let catData = catalogCategorii[catName];
+            let isDrojdii = catName === 'Drojdii';
+            
+            let produseHTML = catData.produse.map((p) => `
+                <div class="card-row" style="padding: 8px 10px; font-size: 0.9rem;">
+                    <span>${p}</span>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn-action" style="font-size: 1rem; padding:0;" onclick="redenumesteProdusCatalog('${catName}', '${p}')"><i class="fas fa-pen"></i></button>
+                        <button class="btn-danger" style="font-size: 1rem; padding:0;" onclick="stergeProdusCatalog('${catName}', '${p}')"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML += `
+                <div class="card" style="margin: 0 0 15px 0; border: 1px solid var(--border); box-shadow: none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; flex-wrap: wrap; gap:10px;">
+                        <div style="font-weight:bold; display:flex; align-items:center; gap:8px;">
+                            <button class="btn-action" style="padding:0;" onclick="redenumesteCategorie('${catName}')"><i class="fas fa-pen"></i></button>
+                            <span>${catName}</span>
+                        </div>
+                        <div style="display:flex; gap:5px; align-items:center;">
+                            ${!isDrojdii ? `
+                                <input type="number" class="input-field" style="width:60px; margin:0; padding:5px; text-align:center;" value="${catData.termen}" onchange="schimbaTermenValabilitate('${catName}', this.value)">
+                                <select class="input-field" style="width:auto; margin:0; padding:5px;" onchange="schimbaUnitValabilitate('${catName}', this.value)">
+                                    <option value="zile" ${catData.unit === 'zile' ? 'selected' : ''}>Zile</option>
+                                    <option value="luni" ${catData.unit === 'luni' ? 'selected' : ''}>Luni</option>
+                                </select>
+                            ` : `<span style="font-size:0.8rem; color:var(--danger); font-weight:bold;">Introducere Manuală Exp.</span>`}
+                        </div>
+                    </div>
+                    <div style="border-top: 1px dashed var(--border); padding-top: 5px;">
+                        ${produseHTML}
+                        <button class="btn-action" style="font-size: 0.9rem; margin-top: 5px; width:100%; text-align:left;" onclick="adaugaProdusCatalog('${catName}')"><i class="fas fa-plus"></i> Adaugă produs nou</button>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    function schimbaTermenValabilitate(catName, newVal) {
+        catalogCategorii[catName].termen = parseInt(newVal) || 0;
+        localStorage.setItem('catalogCategorii', JSON.stringify(catalogCategorii));
+    }
+
+    function schimbaUnitValabilitate(catName, newUnit) {
+        catalogCategorii[catName].unit = newUnit;
+        localStorage.setItem('catalogCategorii', JSON.stringify(catalogCategorii));
+    }
+
+    function adaugaCategorieNoua() {
+        arataPrompt("Categorie Nouă", "", "Ex: Dulciuri", (newName) => {
+            if(!catalogCategorii[newName]) {
+                catalogCategorii[newName] = { termen: 30, unit: 'zile', produse: [] };
+                localStorage.setItem('catalogCategorii', JSON.stringify(catalogCategorii));
+                renderSetariCategorii();
+            }
+        });
+    }
+
+    function redenumesteCategorie(oldName) {
+        arataPrompt("Redenumește Categoria", oldName, "Nume categorie", (newName) => {
+            if (newName && newName !== oldName && !catalogCategorii[newName]) {
+                catalogCategorii[newName] = catalogCategorii[oldName];
+                delete catalogCategorii[oldName];
+                localStorage.setItem('catalogCategorii', JSON.stringify(catalogCategorii));
+                renderSetariCategorii();
+                
+                db.collection("produse_magazin").where("categorie", "==", oldName).get().then(snap => {
+                    let batch = db.batch();
+                    snap.forEach(doc => batch.update(doc.ref, { categorie: newName }));
+                    batch.commit();
+                });
+            }
+        });
+    }
+
+    function adaugaProdusCatalog(categorie) {
+        arataPrompt(`Adaugă produs în ${categorie}`, "", "Denumire produs", (newName) => {
+            catalogCategorii[categorie].produse.push(newName);
+            localStorage.setItem('catalogCategorii', JSON.stringify(catalogCategorii));
+            renderSetariCategorii();
+        });
+    }
+
+    function redenumesteProdusCatalog(categorie, oldProdName) {
+        arataPrompt("Redenumește Produsul", oldProdName, "Nume produs", (newName) => {
+            if (newName && newName !== oldProdName) {
+                let idx = catalogCategorii[categorie].produse.indexOf(oldProdName);
+                if(idx !== -1) {
+                    catalogCategorii[categorie].produse[idx] = newName;
+                    localStorage.setItem('catalogCategorii', JSON.stringify(catalogCategorii));
+                    renderSetariCategorii();
+
+                    db.collection("produse_magazin").where("categorie", "==", categorie).where("nume", "==", oldProdName).get().then(snap => {
+                        let batch = db.batch();
+                        snap.forEach(doc => batch.update(doc.ref, { nume: newName }));
+                        batch.commit();
+                    });
+                }
+            }
+        });
+    }
+
+    function stergeProdusCatalog(categorie, prodName) {
+        cereConfirmare("Șterge Produs Catalog", `Ești sigur că elimini "${prodName}" din opțiunile categoriei?`, () => {
+            let idx = catalogCategorii[categorie].produse.indexOf(prodName);
+            if(idx !== -1) {
+                catalogCategorii[categorie].produse.splice(idx, 1);
+                localStorage.setItem('catalogCategorii', JSON.stringify(catalogCategorii));
+                renderSetariCategorii();
+            }
+        });
+    }
+
+    function setTheme(theme) {
+        if (theme === 'system') {
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.body.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+        } else {
+            document.body.setAttribute('data-theme', theme);
+        }
+    }
+
+    function goTo(pageId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(pageId).classList.add('active');
+        window.scrollTo(0, 0);
+    }
+
+    function showModal(id) { document.getElementById(id).classList.add('active'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+    function schimbaTimpExp(tip) {
+        let elVal = document.getElementById(`val-exp-${tip}`);
+        let val = parseInt(elVal.value);
+        if (isNaN(val) || val < 1) { val = 1; elVal.value = 1; }
+        
+        let unit = document.getElementById(`unit-exp-${tip}`).value;
+        localStorage.setItem(`expTimeVal_${tip}`, val);
+        localStorage.setItem(`expTimeUnit_${tip}`, unit);
+        renderToateExpirarile();
+    }
+
+    function incarcaSetariTimp() {
+        let vG = localStorage.getItem('expTimeVal_global');
+        let vSec = localStorage.getItem('expTimeVal_sector');
+        let vSto = localStorage.getItem('expTimeVal_store');
+        
+        let conf = {
+            global: { val: vG !== null ? parseInt(vG) : 2, unit: localStorage.getItem('expTimeUnit_global') || 'luni' },
+            sector: { val: vSec !== null ? parseInt(vSec) : 1, unit: localStorage.getItem('expTimeUnit_sector') || 'luni' },
+            store:  { val: vSto !== null ? parseInt(vSto) : 2, unit: localStorage.getItem('expTimeUnit_store') || 'saptamani' }
+        };
+        
+        ['global', 'sector', 'store'].forEach(tip => {
+            let elVal = document.getElementById(`val-exp-${tip}`);
+            let elUnit = document.getElementById(`unit-exp-${tip}`);
+            if(elVal) elVal.value = conf[tip].val;
+            if(elUnit) elUnit.value = conf[tip].unit;
+        });
+        
+        return conf;
+    }
+
+    function getZileMaxime(configItem) {
+        let v = configItem.val;
+        if(configItem.unit === 'saptamani') return v * 7;
+        if(configItem.unit === 'luni') return v * 30;
+        return v;
+    }
+
+    function convertDataToTime(dateStr) {
+        if(!dateStr || dateStr === "Dată invalidă" || dateStr === "Calculată") return new Date(8640000000000000).getTime();
+        let parts = dateStr.split('.');
+        if(parts.length !== 3) return new Date(8640000000000000).getTime();
+        return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+    }
+
+    function renderToateExpirarile() {
+        let conf = incarcaSetariTimp();
+        let arrGlobal = [], arrSector = [], arrStore = [];
+        
+        let azi = new Date();
+        azi.setHours(0,0,0,0);
+        let msAzi = azi.getTime();
+
+        let maxG = getZileMaxime(conf.global);
+        let maxSec = getZileMaxime(conf.sector);
+        let maxStore = getZileMaxime(conf.store);
+
+        for(let lotId in dbLoturi) {
+            let lot = dbLoturi[lotId];
+            let expTime = convertDataToTime(lot.dataExp);
+            if(expTime > 8000000000000000) continue; 
+
+            let zileRamase = Math.round((expTime - msAzi) / (1000 * 3600 * 24));
+            
+            let prod = dbProduse[lot.produsId]; if(!prod) continue;
+            let mag = dbMagazine[prod.magazinId]; if(!mag) continue;
+            let sec = dbSectoare[mag.sectorId]; if(!sec) continue;
+
+            let item = { lot, prod, mag, sec, zile: zileRamase };
+
+            if (zileRamase <= maxG) arrGlobal.push(item);
+            if (sectorCurentId === sec.id && zileRamase <= maxSec) arrSector.push(item);
+            if (magazinCurent.id === mag.id && zileRamase <= maxStore) arrStore.push(item);
+        }
+
+        let sortFn = (a, b) => a.zile - b.zile;
+        arrGlobal.sort(sortFn); arrSector.sort(sortFn); arrStore.sort(sortFn);
+
+        function genereazaHtmlExp(item, nivel) {
+            let navSec = `deschideSector('${item.sec.id}', '${item.sec.nume}', '${item.sec.culoare}')`;
+            let navMag = `deschideMagazin('${item.mag.id}', '${item.mag.nume}', '${item.mag.adresa}', '${item.mag.culoare}')`;
+            let navProd = `deschideProdus('${item.prod.id}', '${item.prod.nume}', '${item.mag.culoare}', '${item.prod.categorie}')`;
+
+            let secLink = `<span onclick="${navSec}" style="cursor:pointer; color:var(--accent); text-decoration:underline;">${item.sec.nume}</span>`;
+            let magLink = `<span onclick="${navMag}" style="cursor:pointer; color:var(--accent); text-decoration:underline;">${item.mag.nume}</span>`;
+            let prodLink = `<span onclick="${navProd}" style="cursor:pointer; color:var(--text-main); font-weight:bold;">${item.prod.nume} (${item.lot.cantitate} buc)</span>`;
+
+            let detalii = "";
+            if(nivel === 'global') detalii = `${secLink} > ${magLink}`;
+            if(nivel === 'sector') detalii = `${magLink}`;
+
+            let textExpirare = "";
+            if (item.zile < 0) {
+                textExpirare = `A expirat de <span style="color:var(--danger); font-weight:bold;">${Math.abs(item.zile)} zile</span>`;
+            } else if (item.zile === 0) {
+                textExpirare = `Expiră <span style="color:var(--danger); font-weight:bold;">ASTĂZI</span>`;
+            } else {
+                textExpirare = `Va expira în <span style="color:var(--danger); font-weight:bold;">${item.zile} zile</span>`;
+            }
+
+            return `
+                <div style="border-bottom: 1px solid var(--border); padding: 12px 0; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="flex:1;">
+                        <div style="margin-bottom: 3px;">${prodLink}</div>
+                        <div style="font-size:0.85rem; color:var(--text-main);">${textExpirare}</div>
+                        ${detalii ? `<div style="font-size:0.8rem; color:var(--text-sec); margin-top:3px;">${detalii}</div>` : ''}
+                    </div>
+                    <div style="color:var(--danger); font-size:1.2rem; font-weight:bold; margin-left:10px; text-align:right; min-width:80px;">
+                        ${item.lot.dataExp}
+                    </div>
+                </div>`;
+        }
+
+        let golStr = '<div style="padding:10px; text-align:center; color:var(--text-sec); font-size:0.9rem;">Toate produsele sunt în termen.</div>';
+        
+        let elGlobal = document.getElementById('expirari-globale-list');
+        if(elGlobal) elGlobal.innerHTML = arrGlobal.length ? arrGlobal.map(i => genereazaHtmlExp(i, 'global')).join('') : golStr;
+        
+        let elSector = document.getElementById('expirari-sector-list');
+        if(elSector) elSector.innerHTML = arrSector.length ? arrSector.map(i => genereazaHtmlExp(i, 'sector')).join('') : golStr;
+        
+        let elStore = document.getElementById('expirari-store-list');
+        if(elStore) elStore.innerHTML = arrStore.length ? arrStore.map(i => genereazaHtmlExp(i, 'store')).join('') : golStr;
+    }
+
+    function renderListaSectoare() {
+        const list = document.getElementById('sectors-list');
+        list.innerHTML = '';
+        let array = Object.values(dbSectoare).sort((a,b) => (a.timestamp?.toMillis()||0) - (b.timestamp?.toMillis()||0));
+        
+        if (array.length === 0) { list.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-sec);">Nu există sectoare.</div>'; return; }
+
+        array.forEach(s => {
+            list.innerHTML += `
+                <div class="card" style="background-color: ${s.culoare}; color: white; cursor:pointer;" onclick="deschideSector('${s.id}', '${s.nume}', '${s.culoare}')">
+                    <div class="card-header">
+                        ${s.nume}
+                        <button class="icon-btn" onclick="event.stopPropagation(); stergeSectorFirebase('${s.id}')"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>`;
+        });
+    }
+
+    function salveazaSector() {
+        const nume = document.getElementById('new-sector-name').value;
+        const culoare = document.getElementById('new-sector-color').value;
+        if(nume) {
+            db.collection("sectoare").add({ nume, culoare, timestamp: firebase.firestore.FieldValue.serverTimestamp() })
+              .then(() => { closeModal('modal-sector'); document.getElementById('new-sector-name').value = ''; });
+        }
+    }
+
+    function stergeSectorFirebase(id) {
+        cereConfirmare("Ștergere Sector", "Ești sigur? Vor fi șterse referințele către acest sector.", () => {
+            db.collection("sectoare").doc(id).delete();
+        });
+    }
+
+    function deschideSector(id, nume, culoare) {
+        sectorCurentId = id;
+        document.getElementById('sector-title-display').innerText = nume;
+        document.getElementById('sector-header-color').style.backgroundColor = culoare;
+        renderMagazineDinSector();
+        renderToateExpirarile();
+        goTo('page-sector');
+    }
+
+    function renderMagazineDinSector() {
+        const list = document.getElementById('stores-list');
+        list.innerHTML = '';
+        let array = Object.values(dbMagazine).filter(m => m.sectorId === sectorCurentId).sort((a,b) => (a.timestamp?.toMillis()||0) - (b.timestamp?.toMillis()||0));
+
+        if (array.length === 0) { list.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-sec);">Nu există magazine.</div>'; return; }
+
+        array.forEach(m => {
+            list.innerHTML += `
+                <div class="card" onclick="deschideMagazin('${m.id}', '${m.nume}', '${m.adresa}', '${m.culoare}')" style="cursor:pointer; border-left: 5px solid ${m.culoare}; position: relative;">
+                    <div style="padding-right: 35px;">
+                        <div style="font-weight:bold; font-size:1.1rem;">${m.nume}</div>
+                        <div style="color:var(--text-sec); font-size:0.9rem;">${m.adresa}</div>
+                    </div>
+                    <button class="btn-danger" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%);" onclick="event.stopPropagation(); stergeMagazinFirebase('${m.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>`;
+        });
+    }
+
+    function salveazaMagazin() {
+        const nume = document.getElementById('new-store-name').value;
+        const adresa = document.getElementById('new-store-address').value;
+        const sel = document.getElementById('new-store-network');
+        const culoare = sel.options[sel.selectedIndex]?.getAttribute('data-color') || '#4CAF50';
+        const reteaVal = sel.value || 'Local';
+        
+        if (nume && sectorCurentId) {
+            db.collection("magazine").add({
+                sectorId: sectorCurentId, nume, adresa, retea: reteaVal, culoare, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(() => {
+                closeModal('modal-store'); document.getElementById('new-store-name').value = ''; document.getElementById('new-store-address').value = '';
+            });
+        }
+    }
+
+    function stergeMagazinFirebase(id) {
+        cereConfirmare("Ștergere Magazin", "Ești sigur că vrei să ștergi acest magazin?", () => { db.collection("magazine").doc(id).delete(); });
+    }
+
+    function deschideMagazin(id, nume, adresa, culoare) {
+        magazinCurent = { id, nume, adresa, culoare };
+        document.getElementById('store-title-display').innerText = nume;
+        document.getElementById('store-address-display').innerText = adresa;
+        document.getElementById('store-header-color').style.backgroundColor = culoare;
+        
+        deseneazaProprietatiInMagazin();
+        
+        if (unsubscribeProduseCurente) unsubscribeProduseCurente();
+        unsubscribeProduseCurente = db.collection("produse_magazin").where("magazinId", "==", id).onSnapshot(snapshot => {
+            let produseInStore = {};
+            Object.keys(catalogCategorii).forEach(cat => produseInStore[cat] = []);
+
+            snapshot.forEach(doc => {
+                let p = doc.data(); p.id = doc.id;
+                if (!produseInStore[p.categorie]) produseInStore[p.categorie] = [];
+                produseInStore[p.categorie].push(p);
+            });
+
+            const catList = document.getElementById('categories-list');
+            catList.innerHTML = '';
+            
+            for (const [categorie, listaProduse] of Object.entries(produseInStore)) {
+                let prodHTML = listaProduse.map(p => `
+                    <div class="card-row" onclick="deschideProdus('${p.id}', '${p.nume}', '${magazinCurent.culoare}', '${categorie}')" style="cursor:pointer;">
+                        <span>${p.nume}</span> 
+                        <div>
+                            <button class="btn-danger" style="margin-right: 15px;" onclick="event.stopPropagation(); stergeProdusFirebase('${p.id}')"><i class="fas fa-trash"></i></button>
+                            <i class="fas fa-chevron-right" style="color:var(--border);"></i>
+                        </div>
+                    </div>`).join('');
+
+                let isDeschis = listaProduse.length > 0;
+                let displayStyle = isDeschis ? 'block' : 'none';
+                let rotateStyle = isDeschis ? 'rotate(0deg)' : 'rotate(90deg)';
+
+                if(listaProduse.length === 0) prodHTML = `<div style="text-align:center; color:var(--text-sec); font-size:0.8rem; padding:10px;">Niciun produs adăugat.</div>`;
+
+                catList.innerHTML += `
+                    <div class="card">
+                        <div class="card-header" onclick="toggleCategorie(this)">
+                            ${categorie} 
+                            <span style="display:flex; align-items:center; gap: 10px;">
+                                <button class="btn-action" style="padding:0;" onclick="event.stopPropagation(); deschideModalAdaugaProdus('${categorie}')"><i class="fas fa-plus"></i></button> 
+                                <i class="fas fa-chevron-down chevron-icon" style="transition: transform 0.3s ease; transform: ${rotateStyle}; color: var(--border);"></i>
+                            </span>
+                        </div>
+                        <div style="display: ${displayStyle}; padding-top:10px;">${prodHTML}</div>
+                    </div>`;
+            }
+        });
+        
+        renderToateExpirarile();
+        goTo('page-store');
+    }
+
+    function toggleCategorie(element) {
+        let content = element.nextElementSibling; let icon = element.querySelector('.chevron-icon');
+        if (content.style.display === 'none') { content.style.display = 'block'; icon.style.transform = 'rotate(0deg)'; } 
+        else { content.style.display = 'none'; icon.style.transform = 'rotate(90deg)'; }
+    }
+
+    function deschideModalAdaugaProdus(categorie) {
+        document.getElementById('modal-product-title').innerText = `Adaugă în: ${categorie}`;
+        document.getElementById('new-product-category').value = categorie;
+        const select = document.getElementById('new-product-select');
+        select.innerHTML = '<option value="">-- Selectează un produs --</option>';
+        if(catalogCategorii[categorie]) {
+            catalogCategorii[categorie].produse.forEach(p => { select.innerHTML += `<option value="${p}">${p}</option>`; });
+        }
+        showModal('modal-add-product');
+    }
+
+    function salveazaProdusInMagazin() {
+        const categorie = document.getElementById('new-product-category').value;
+        const numeFinal = document.getElementById('new-product-select').value;
+        if(!numeFinal) { alert('Alege un produs din listă!'); return; }
+
+        db.collection("produse_magazin").add({
+            magazinId: magazinCurent.id, categorie: categorie, nume: numeFinal, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => closeModal('modal-add-product'));
+    }
+
+    function stergeProdusFirebase(id) {
+        cereConfirmare("Ștergere Produs", "Ești sigur că vrei să elimini acest produs din magazin?", () => { db.collection("produse_magazin").doc(id).delete(); });
+    }
+
+    function deschideProdus(id, numeProdus, culoareHeader, categorie) {
+        produsCurent = { id: id, nume: numeProdus, categorie: categorie };
+        document.getElementById('product-title-display').innerText = numeProdus;
+        document.getElementById('product-store-display').innerText = `${magazinCurent.nume} - ${magazinCurent.adresa}`;
+        document.getElementById('product-header-color').style.backgroundColor = culoareHeader;
+        
+        document.getElementById('vitrina-total').innerText = '0'; document.getElementById('stoc-manual').value = '';
+        document.getElementById('depozit-input').value = ''; document.getElementById('notite-input').value = '';
+        document.getElementById('batches-list').innerHTML = ''; 
+        
+        if (unsubscribeLoturiCurente) unsubscribeLoturiCurente();
+        unsubscribeLoturiCurente = db.collection("loturi").where("produsId", "==", id).onSnapshot(snapshot => {
+            let loturiArray = []; let totalVitrina = 0; let isDrojdii = produsCurent.categorie === 'Drojdii';
+
+            snapshot.forEach(doc => {
+                let lot = doc.data(); lot.id = doc.id;
+                
+                if(!isDrojdii) {
+                    let expirareActualizata = calculeazaExpirare(lot.dataProd, produsCurent.categorie);
+                    if (lot.dataExp !== expirareActualizata && expirareActualizata !== "Dată invalidă") {
+                        db.collection("loturi").doc(lot.id).update({ dataExp: expirareActualizata });
+                        lot.dataExp = expirareActualizata; 
+                    }
+                }
+                loturiArray.push(lot); totalVitrina += lot.cantitate;
+            });
+
+            loturiArray.sort((a, b) => convertDataToTime(a.dataExp) - convertDataToTime(b.dataExp));
+            document.getElementById('vitrina-total').innerText = totalVitrina;
+            
+            const list = document.getElementById('batches-list');
+            list.innerHTML = '';
+            loturiArray.forEach((lot) => {
+                list.innerHTML += `
+                    <div class="card-row" style="background: var(--bg-color); padding: 10px; border-radius:10px; margin-top:10px;">
+                        <div style="display:flex; flex-direction:column; align-items:center;">
+                            <span style="font-size:0.8rem; color:var(--text-sec)">Buc</span>
+                            <input type="number" value="${lot.cantitate}" class="input-field" style="width:50px; text-align:center; padding:5px; margin:0; font-weight:bold;" onchange="actualizeazaCantitateLot('${lot.id}', this.value)">
+                        </div>
+                        <div style="display:flex; flex-direction:column; align-items:center;">
+                            <span style="font-size:0.8rem; color:var(--text-sec)">Expiră pe</span>
+                            ${isDrojdii 
+                                ? `<input type="text" value="${lot.dataExp}" class="input-field" style="color:var(--danger); font-weight:bold; width:90px; text-align:center; padding:5px; margin:0;" onchange="actualizeazaDataExpDirect('${lot.id}', this.value)">`
+                                : `<strong style="color:var(--danger)">${lot.dataExp}</strong>`}
+                        </div>
+                        <div style="display:flex; flex-direction:column; align-items:center;">
+                            <span style="font-size:0.8rem; color:var(--text-sec)">Data Prod.</span>
+                            ${isDrojdii 
+                                ? `<span style="font-size:0.8rem; color:var(--border); margin-top:10px;">N/A</span>`
+                                : `<input type="text" value="${lot.dataProd}" class="input-field" style="width:90px; text-align:center; padding:5px; margin:0;" onchange="actualizeazaDataProdLot('${lot.id}', this.value)">`}
+                        </div>
+                        <button class="btn-danger" onclick="stergeLotFirebase('${lot.id}')"><i class="fas fa-times-circle"></i></button>
+                    </div>`;
+            });
+        });
+        
+        goTo('page-product');
+    }
+
+    function deschideModalLot() {
+        document.getElementById('batch-qty').value = '';
+        document.getElementById('batch-date').value = '';
+        let eticheta = document.getElementById('batch-date-label');
+        if (produsCurent.categorie === 'Drojdii') {
+            eticheta.innerText = "Data Expirării (ZZ.LL.AAAA)";
+            eticheta.style.color = "var(--danger)";
+        } else {
+            eticheta.innerText = "Data Prod. (ZZ.LL.AAAA)";
+            eticheta.style.color = "var(--text-sec)";
+        }
+        showModal('modal-batch');
+    }
+
+    function actualizeazaCantitateLot(lotId, nouaValoare) {
+        db.collection("loturi").doc(lotId).update({ cantitate: parseInt(nouaValoare) || 0 }).then(() => setActualizat());
+    }
+
+    function actualizeazaDataProdLot(lotId, nouaDataProd) {
+        let expirareActualizata = calculeazaExpirare(nouaDataProd, produsCurent.categorie);
+        if(expirareActualizata !== "Dată invalidă") {
+            db.collection("loturi").doc(lotId).update({ dataProd: nouaDataProd, dataExp: expirareActualizata }).then(() => setActualizat());
+        } else { alert("Dată invalidă! Formula: ZZ.LL.AAAA"); }
+    }
+
+    function actualizeazaDataExpDirect(lotId, nouaDataExp) {
+        if(convertDataToTime(nouaDataExp) < 8000000000000000) {
+            db.collection("loturi").doc(lotId).update({ dataExp: nouaDataExp }).then(() => setActualizat());
+        } else { alert("Dată invalidă! Formula: ZZ.LL.AAAA"); }
+    }
+
+    function setActualizat() {
+        const now = new Date(); document.getElementById('data-actualizare').innerText = `Actualizat - ${now.getDate()}.${now.getMonth()+1}.${now.getFullYear()}`;
+    }
+
+    function formateazaData(val) {
+        if(!val) return;
+        let d = new Date(val);
+        document.getElementById('batch-date').value = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+    }
+
+    function calculeazaExpirare(dataProdStr, categorie) {
+        let parts = dataProdStr.split('.'); if(parts.length !== 3) return "Dată invalidă";
+        let prodDate = new Date(parts[2], parts[1] - 1, parts[0]);
+        if(!catalogCategorii[categorie]) return "Calculată";
+
+        let termVal = parseInt(catalogCategorii[categorie].termen) || 0;
+        let termUnit = catalogCategorii[categorie].unit;
+
+        if (termUnit === 'zile') prodDate.setDate(prodDate.getDate() + termVal);
+        else if (termUnit === 'luni') prodDate.setMonth(prodDate.getMonth() + termVal);
+
+        return `${String(prodDate.getDate()).padStart(2, '0')}.${String(prodDate.getMonth() + 1).padStart(2, '0')}.${prodDate.getFullYear()}`;
+    }
+
+    function adaugaLot() {
+        const qty = parseInt(document.getElementById('batch-qty').value) || 0;
+        const dateStr = document.getElementById('batch-date').value;
+        
+        if(dateStr && produsCurent.id) {
+            let isDrojdii = produsCurent.categorie === 'Drojdii';
+            let expirareStr = isDrojdii ? dateStr : calculeazaExpirare(dateStr, produsCurent.categorie);
+            let prodStr = isDrojdii ? "N/A" : dateStr;
+            
+            db.collection("loturi").add({
+                produsId: produsCurent.id, cantitate: qty, dataProd: prodStr, dataExp: expirareStr, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(() => {
+                setActualizat(); closeModal('modal-batch');
+            });
+        } else { alert('Introduceți măcar data!'); }
+    }
+
+    function stergeLotFirebase(id) {
+        cereConfirmare("Ștergere Lot", "Ești sigur că vrei să ștergi definitiv acest lot?", () => { db.collection("loturi").doc(id).delete(); });
+    }
+
+    function trimiteInSheets() {
+        const val = document.getElementById('stoc-manual').value;
+        if(val) alert(`S-a trimis către Google Sheets!\nStoc: ${val}`);
+        else alert("Introdu o valoare în Stoc mai întâi!");
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        setTheme('system');
+        renderSetariRetele();
+        renderSetariProprietati();
+        renderSetariCategorii();
+        incarcaSetariTimp();
+        
+        let loadedCount = 0;
+        const total = 4; 
+
+        function checkReady() {
+            loadedCount++;
+            if (loadedCount === total) {
+                const loader = document.getElementById('app-loader');
+                if (loader) {
+                    loader.style.opacity = '0';
+                    setTimeout(() => { loader.style.display = 'none'; }, 300); // 300ms fade-out
+                }
+            }
+        }
+
+        db.collection("sectoare").onSnapshot(s => { 
+            dbSectoare = {}; s.forEach(d => dbSectoare[d.id] = {id: d.id, ...d.data()}); 
+            renderListaSectoare(); renderToateExpirarile(); checkReady(); 
+        });
+        
+        db.collection("magazine").onSnapshot(s => { 
+            dbMagazine = {}; s.forEach(d => dbMagazine[d.id] = {id: d.id, ...d.data()}); 
+            if(sectorCurentId) renderMagazineDinSector(); renderToateExpirarile(); checkReady(); 
+        });
+        
+        db.collection("produse_magazin").onSnapshot(s => { 
+            dbProduse = {}; s.forEach(d => dbProduse[d.id] = {id: d.id, ...d.data()}); 
+            renderToateExpirarile(); checkReady(); 
+        });
+        
+        db.collection("loturi").onSnapshot(s => { 
+            dbLoturi = {}; s.forEach(d => dbLoturi[d.id] = {id: d.id, ...d.data()}); 
+            renderToateExpirarile(); checkReady(); 
+        });
+    });
+</script>
+
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('Service Worker Liada înregistrat cu succes!'))
+                .catch(err => console.log('Eroare Service Worker:', err));
+        });
+    }
+</script>
+
+</body>
+</html>
