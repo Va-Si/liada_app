@@ -119,19 +119,22 @@
         .qty-item span { display: block; font-size: 0.8rem; color: var(--text-sec); margin-bottom: 5px; }
         .qty-item input { width: 60%; text-align: center; border: none; background: none; font-weight: bold; font-size: 1.2rem; color: var(--text-main);}
         .btn-telegram { color: white; background-color: #0088cc; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer; }
+        
         @keyframes pulse {
-                0% { opacity: 1; }
-                50% { opacity: 0.5; }
-                100% { opacity: 1; }
-            }
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
     </style>
 </head>
 <body data-theme="system">
 
 <div id="app-container">
-    <div id="app-loader" style="position: fixed; top:0; left:0; width:100%; height:100%; background-color: #f2f2f7; z-index: 9999; display: flex; align-items: center; justify-content: center;">
-    <div style="font-weight:bold; color: #2563eb; font-size: 1.2rem; animation: pulse 1.5s infinite;">Se sincronizează...</div>
-</div>
+    
+    <div id="app-loader" style="position: fixed; top:0; left:0; width:100%; height:100%; background-color: var(--bg-color); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.3s ease;">
+        <img src="https://cdn-icons-png.flaticon.com/512/1356/1356559.png" alt="Liada Logo" style="width: 120px; height: 120px; animation: pulse 1.5s infinite; margin-bottom: 20px;">
+        <h1 style="font-weight: 900; color: var(--liada-red); font-size: 2.2rem; margin: 0; letter-spacing: 2px;">LIADA</h1>
+    </div>
 
     <div id="page-main" class="page active">
         <div class="frozen-header" style="background-color: var(--liada-red);">
@@ -149,7 +152,7 @@
             <div class="card-header" style="color: var(--danger); flex-wrap: wrap;">
                 <span style="margin-bottom:5px;"><i class="fas fa-exclamation-circle"></i> Expiră în curând</span>
                 <div style="display:flex; gap:5px; align-items:center;">
-                    <input type="number" id="val-exp-global" class="input-field" style="width:60px; margin:0; padding:2px 5px; font-size:0.9rem; text-align:center;" onchange="schimbaTimpExp('global')">
+                    <input type="number" min="1" id="val-exp-global" class="input-field" style="width:60px; margin:0; padding:2px 5px; font-size:0.9rem; text-align:center;" onchange="schimbaTimpExp('global')">
                     <select id="unit-exp-global" class="input-field" style="width:auto; margin:0; padding:2px 5px; font-size:0.9rem;" onchange="schimbaTimpExp('global')">
                         <option value="zile">Zile</option>
                         <option value="saptamani">Săpt.</option>
@@ -218,7 +221,7 @@
             <div class="card-header" style="color: var(--danger); flex-wrap: wrap;">
                 <span style="margin-bottom:5px;"><i class="fas fa-exclamation-circle"></i> Expiră în curând</span>
                 <div style="display:flex; gap:5px; align-items:center;">
-                    <input type="number" id="val-exp-sector" class="input-field" style="width:60px; margin:0; padding:2px 5px; font-size:0.9rem; text-align:center;" onchange="schimbaTimpExp('sector')">
+                    <input type="number" min="1" id="val-exp-sector" class="input-field" style="width:60px; margin:0; padding:2px 5px; font-size:0.9rem; text-align:center;" onchange="schimbaTimpExp('sector')">
                     <select id="unit-exp-sector" class="input-field" style="width:auto; margin:0; padding:2px 5px; font-size:0.9rem;" onchange="schimbaTimpExp('sector')">
                         <option value="zile">Zile</option>
                         <option value="saptamani">Săpt.</option>
@@ -258,7 +261,7 @@
             <div class="card-header" style="color: var(--danger); flex-wrap: wrap;">
                 <span style="margin-bottom:5px;"><i class="fas fa-exclamation-circle"></i> Expiră în curând</span>
                 <div style="display:flex; gap:5px; align-items:center;">
-                    <input type="number" id="val-exp-store" class="input-field" style="width:60px; margin:0; padding:2px 5px; font-size:0.9rem; text-align:center;" onchange="schimbaTimpExp('store')">
+                    <input type="number" min="1" id="val-exp-store" class="input-field" style="width:60px; margin:0; padding:2px 5px; font-size:0.9rem; text-align:center;" onchange="schimbaTimpExp('store')">
                     <select id="unit-exp-store" class="input-field" style="width:auto; margin:0; padding:2px 5px; font-size:0.9rem;" onchange="schimbaTimpExp('store')">
                         <option value="zile">Zile</option>
                         <option value="saptamani">Săpt.</option>
@@ -407,7 +410,7 @@
     <div id="modal-batch" class="modal-overlay">
         <div class="modal-content">
             <h3 style="margin-top:0;">Adaugă Lot Nou</h3>
-            <input type="number" class="input-field" id="batch-qty" placeholder="Cantitate (Buc)">
+            <input type="number" class="input-field" id="batch-qty" placeholder="Cantitate (opțional)">
             <div style="display:flex; gap:10px; align-items:center;">
                 <input type="text" class="input-field" id="batch-date" placeholder="Data (ZZ.LL.AAAA)">
                 <input type="date" class="input-field" id="batch-date-picker" style="width: 40px; padding:5px;" onchange="formateazaData(this.value)">
@@ -451,7 +454,7 @@
         "Paste de tomat": { termen: 180, unit: "zile", produse: ["🔵 Tomate 70g", "🔵 Tomate 275g"] },
         "Muștar": { termen: 120, unit: "zile", produse: ["🟡 Rusesc 200g"] },
         "Oțet": { termen: 12, unit: "luni", produse: ["🟤 Acid Acetic de Mere 5%", "🟢 Acid Acetic 6%", "🟡 Acid Acetic 9%"] },
-        "Drojdii": { termen: 0, unit: "zile", produse: ["🟡 Secretul Bunicii 50g"] } // Drojdiile nu folosesc termen
+        "Drojdii": { termen: 0, unit: "zile", produse: ["🟡 Secretul Bunicii 50g"] }
     };
     let catalogCategorii = JSON.parse(localStorage.getItem('catalogCategorii')) || defaultCatalog;
     let reteleMagazine = JSON.parse(localStorage.getItem('reteleMagazine')) || [{ nume: 'Local', culoare: '#4CAF50' }, { nume: 'Linella', culoare: '#E53935' }];
@@ -461,7 +464,6 @@
     let sectorCurentId = null;
     let produsCurent = { id: null, nume: '', categorie: '' };
     
-    // Baza de date locală (Sincronizare în timp real dinamică)
     let dbSectoare = {};
     let dbMagazine = {};
     let dbProduse = {};
@@ -581,7 +583,6 @@
         });
     }
 
-    // === SISTEM DINAMIC CATEGORII ȘI PRODUSE (SETĂRI) ===
     function renderSetariCategorii() {
         const container = document.getElementById('lista-categorii-setari');
         container.innerHTML = '';
@@ -701,7 +702,6 @@
         });
     }
 
-    // --- FUNCȚII DE NAVIGARE ---
     function setTheme(theme) {
         if (theme === 'system') {
             const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -720,9 +720,11 @@
     function showModal(id) { document.getElementById(id).classList.add('active'); }
     function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
-    // --- ALGORITM: EXPIRĂ ÎN CURÂND (CUSTOM, DINAMIC, INTELIGENT) ---
     function schimbaTimpExp(tip) {
-        let val = document.getElementById(`val-exp-${tip}`).value;
+        let elVal = document.getElementById(`val-exp-${tip}`);
+        let val = parseInt(elVal.value);
+        if (isNaN(val) || val < 1) { val = 1; elVal.value = 1; }
+        
         let unit = document.getElementById(`unit-exp-${tip}`).value;
         localStorage.setItem(`expTimeVal_${tip}`, val);
         localStorage.setItem(`expTimeUnit_${tip}`, unit);
@@ -753,7 +755,7 @@
     function getZileMaxime(configItem) {
         let v = configItem.val;
         if(configItem.unit === 'saptamani') return v * 7;
-        if(configItem.unit === 'luni') return v * 30; // Aproximare standard pentru UI rapid
+        if(configItem.unit === 'luni') return v * 30;
         return v;
     }
 
@@ -761,7 +763,7 @@
         if(!dateStr || dateStr === "Dată invalidă" || dateStr === "Calculată") return new Date(8640000000000000).getTime();
         let parts = dateStr.split('.');
         if(parts.length !== 3) return new Date(8640000000000000).getTime();
-        return new Date(parts[2], parts[1] - 1, parts[0]).getTime(); // Setat la miezul nopții
+        return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
     }
 
     function renderToateExpirarile() {
@@ -781,7 +783,6 @@
             let expTime = convertDataToTime(lot.dataExp);
             if(expTime > 8000000000000000) continue; 
 
-            // Diferența în zile exacte de la miezul nopții trecute
             let zileRamase = Math.round((expTime - msAzi) / (1000 * 3600 * 24));
             
             let prod = dbProduse[lot.produsId]; if(!prod) continue;
@@ -811,21 +812,25 @@
             if(nivel === 'global') detalii = `${secLink} > ${magLink}`;
             if(nivel === 'sector') detalii = `${magLink}`;
 
-            // Calculăm textul inteligent de expirare, bazat pe trecerea reală a zilelor
             let textExpirare = "";
             if (item.zile < 0) {
-                textExpirare = `Expirat de ${Math.abs(item.zile)} zile de la data expirării ${item.lot.dataExp}`;
+                textExpirare = `A expirat de <span style="color:var(--danger); font-weight:bold;">${Math.abs(item.zile)} zile</span>`;
             } else if (item.zile === 0) {
-                textExpirare = `Expiră ASTĂZI la data de ${item.lot.dataExp}`;
+                textExpirare = `Expiră <span style="color:var(--danger); font-weight:bold;">ASTĂZI</span>`;
             } else {
-                textExpirare = `Expiră peste ${item.zile} zile la data de ${item.lot.dataExp}`;
+                textExpirare = `Va expira în <span style="color:var(--danger); font-weight:bold;">${item.zile} zile</span>`;
             }
 
             return `
-                <div style="border-bottom: 1px solid var(--border); padding: 10px 0;">
-                    <div style="margin-bottom: 5px;">${prodLink}</div>
-                    <div style="font-size:0.85rem; color:var(--danger); font-weight:bold;">${textExpirare}</div>
-                    ${detalii ? `<div style="font-size:0.8rem; color:var(--text-sec); margin-top:3px;">${detalii}</div>` : ''}
+                <div style="border-bottom: 1px solid var(--border); padding: 12px 0; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="flex:1;">
+                        <div style="margin-bottom: 3px;">${prodLink}</div>
+                        <div style="font-size:0.85rem; color:var(--text-main);">${textExpirare}</div>
+                        ${detalii ? `<div style="font-size:0.8rem; color:var(--text-sec); margin-top:3px;">${detalii}</div>` : ''}
+                    </div>
+                    <div style="color:var(--danger); font-size:1.2rem; font-weight:bold; margin-left:10px; text-align:right; min-width:80px;">
+                        ${item.lot.dataExp}
+                    </div>
                 </div>`;
         }
 
@@ -841,7 +846,6 @@
         if(elStore) elStore.innerHTML = arrStore.length ? arrStore.map(i => genereazaHtmlExp(i, 'store')).join('') : golStr;
     }
 
-    // --- GESTIUNE FIREBASE: SECTOARE ---
     function renderListaSectoare() {
         const list = document.getElementById('sectors-list');
         list.innerHTML = '';
@@ -875,7 +879,6 @@
         });
     }
 
-    // --- GESTIUNE FIREBASE: MAGAZINE ---
     function deschideSector(id, nume, culoare) {
         sectorCurentId = id;
         document.getElementById('sector-title-display').innerText = nume;
@@ -926,7 +929,6 @@
         cereConfirmare("Ștergere Magazin", "Ești sigur că vrei să ștergi acest magazin?", () => { db.collection("magazine").doc(id).delete(); });
     }
 
-    // --- GESTIUNE FIREBASE: PRODUSE ÎN MAGAZIN ---
     function deschideMagazin(id, nume, adresa, culoare) {
         magazinCurent = { id, nume, adresa, culoare };
         document.getElementById('store-title-display').innerText = nume;
@@ -1014,7 +1016,6 @@
         cereConfirmare("Ștergere Produs", "Ești sigur că vrei să elimini acest produs din magazin?", () => { db.collection("produse_magazin").doc(id).delete(); });
     }
 
-    // --- 7. LOGICĂ PAGINA PRODUS (DROJDII & CALCUL) ---
     function deschideProdus(id, numeProdus, culoareHeader, categorie) {
         produsCurent = { id: id, nume: numeProdus, categorie: categorie };
         document.getElementById('product-title-display').innerText = numeProdus;
@@ -1133,7 +1134,7 @@
         const qty = parseInt(document.getElementById('batch-qty').value) || 0;
         const dateStr = document.getElementById('batch-date').value;
         
-        if(qty > 0 && dateStr && produsCurent.id) {
+        if(dateStr && produsCurent.id) {
             let isDrojdii = produsCurent.categorie === 'Drojdii';
             let expirareStr = isDrojdii ? dateStr : calculeazaExpirare(dateStr, produsCurent.categorie);
             let prodStr = isDrojdii ? "N/A" : dateStr;
@@ -1143,7 +1144,7 @@
             }).then(() => {
                 setActualizat(); closeModal('modal-batch');
             });
-        } else { alert('Introduceți cantitatea și data!'); }
+        } else { alert('Introduceți măcar data!'); }
     }
 
     function stergeLotFirebase(id) {
@@ -1156,47 +1157,58 @@
         else alert("Introdu o valoare în Stoc mai întâi!");
     }
 
-    // --- INITIALIZARE GLOBALA SI SINCRONIZARE CACHE ---
- document.addEventListener('DOMContentLoaded', () => {
-    setTheme('system');
-    renderSetariRetele();
-    renderSetariProprietati();
-    renderSetariCategorii();
-    incarcaSetariTimp();
-    
-    // Lista de promise-uri pentru a ști când suntem gata
-    let loadedCount = 0;
-    const total = 4; // Avem 4 colecții principale
+    document.addEventListener('DOMContentLoaded', () => {
+        setTheme('system');
+        renderSetariRetele();
+        renderSetariProprietati();
+        renderSetariCategorii();
+        incarcaSetariTimp();
+        
+        let loadedCount = 0;
+        const total = 4; 
 
-    function checkReady() {
-        loadedCount++;
-        if (loadedCount === total) {
-            // Totul a fost încărcat, ascundem loader-ul
-            const loader = document.getElementById('app-loader');
-            if (loader) loader.style.display = 'none';
+        function checkReady() {
+            loadedCount++;
+            if (loadedCount === total) {
+                const loader = document.getElementById('app-loader');
+                if (loader) {
+                    loader.style.opacity = '0';
+                    setTimeout(() => { loader.style.display = 'none'; }, 300); // 300ms fade-out
+                }
+            }
         }
-    }
 
-    db.collection("sectoare").onSnapshot(s => { 
-        dbSectoare = {}; s.forEach(d => dbSectoare[d.id] = {id: d.id, ...d.data()}); 
-        renderListaSectoare(); renderToateExpirarile(); checkReady(); 
+        db.collection("sectoare").onSnapshot(s => { 
+            dbSectoare = {}; s.forEach(d => dbSectoare[d.id] = {id: d.id, ...d.data()}); 
+            renderListaSectoare(); renderToateExpirarile(); checkReady(); 
+        });
+        
+        db.collection("magazine").onSnapshot(s => { 
+            dbMagazine = {}; s.forEach(d => dbMagazine[d.id] = {id: d.id, ...d.data()}); 
+            if(sectorCurentId) renderMagazineDinSector(); renderToateExpirarile(); checkReady(); 
+        });
+        
+        db.collection("produse_magazin").onSnapshot(s => { 
+            dbProduse = {}; s.forEach(d => dbProduse[d.id] = {id: d.id, ...d.data()}); 
+            renderToateExpirarile(); checkReady(); 
+        });
+        
+        db.collection("loturi").onSnapshot(s => { 
+            dbLoturi = {}; s.forEach(d => dbLoturi[d.id] = {id: d.id, ...d.data()}); 
+            renderToateExpirarile(); checkReady(); 
+        });
     });
-    
-    db.collection("magazine").onSnapshot(s => { 
-        dbMagazine = {}; s.forEach(d => dbMagazine[d.id] = {id: d.id, ...d.data()}); 
-        if(sectorCurentId) renderMagazineDinSector(); renderToateExpirarile(); checkReady(); 
-    });
-    
-    db.collection("produse_magazin").onSnapshot(s => { 
-        dbProduse = {}; s.forEach(d => dbProduse[d.id] = {id: d.id, ...d.data()}); 
-        renderToateExpirarile(); checkReady(); 
-    });
-    
-    db.collection("loturi").onSnapshot(s => { 
-        dbLoturi = {}; s.forEach(d => dbLoturi[d.id] = {id: d.id, ...d.data()}); 
-        renderToateExpirarile(); checkReady(); 
-    });
-});
 </script>
+
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('Service Worker Liada înregistrat cu succes!'))
+                .catch(err => console.log('Eroare Service Worker:', err));
+        });
+    }
+</script>
+
 </body>
 </html>
