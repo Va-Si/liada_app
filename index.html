@@ -59,11 +59,17 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         /* ================= INSULA ÎNGHEȚATĂ (HEADERS) ================= */
-        .frozen-header {
-            position: sticky; top: 10px; margin: 10px; padding: 15px 20px; border-radius: 25px;
-            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
-            display: flex; flex-direction: column; gap: 10px; z-index: 100; box-shadow: 0 4px 15px rgba(0,0,0,0.1); color: white;
-        }
+       .frozen-header {
+                    position: sticky; top: 10px; margin: 10px; padding: 15px 20px; border-radius: 25px;
+                    /* Eliminăm blur-ul până când pagina este gata */
+                    background-color: var(--liada-red); 
+                    display: flex; flex-direction: column; gap: 10px; z-index: 100; box-shadow: 0 4px 15px rgba(0,0,0,0.1); color: white;
+                }
+                /* Re-aplicăm blur-ul doar după ce aplicația e încărcată */
+                .page.active .frozen-header {
+                    backdrop-filter: blur(15px);
+                    -webkit-backdrop-filter: blur(15px);
+                }
         .header-top { display: flex; justify-content: space-between; align-items: center; }
         .header-nav { display: flex; gap: 15px; justify-content: center; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 10px; }
         .header-title { margin: 0; font-size: 1.6rem; font-weight: 800; }
