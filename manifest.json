@@ -3,7 +3,7 @@
   "short_name": "Liada",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "background_color": "#f2f2f7", 
   "theme_color": "#FF3B30",
   "icons": [
     {
