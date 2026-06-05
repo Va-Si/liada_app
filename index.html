@@ -114,12 +114,18 @@
             return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
         },
         calculeazaExpirare: (dataProdStr, categorieObj) => {
-            let parts = dataProdStr.split('.'); if(parts.length !== 3) return "Dată invalidă";
-            let prodDate = new Date(parts[2], parts[1] - 1, parts[0]);
+            if(!/^\d{2}\.\d{2}\.\d{4}$/.test(dataProdStr)) return "Dată invalidă";
+            let parts = dataProdStr.split('.');
+            let d = parseInt(parts[0], 10), m = parseInt(parts[1], 10), y = parseInt(parts[2], 10);
+            if(isNaN(d) || isNaN(m) || isNaN(y)) return "Dată invalidă";
+            
+            let prodDate = new Date(y, m - 1, d);
             if(!categorieObj) return "Calculată";
+            
             let termVal = parseInt(categorieObj.termen) || 0;
             if (categorieObj.unit === 'zile') prodDate.setDate(prodDate.getDate() + termVal);
             else if (categorieObj.unit === 'luni') prodDate.setMonth(prodDate.getMonth() + termVal);
+            
             return `${String(prodDate.getDate()).padStart(2, '0')}.${String(prodDate.getMonth() + 1).padStart(2, '0')}.${prodDate.getFullYear()}`;
         },
         sortByOrder: (arr) => arr.sort((a,b) => (a.order ?? a.timestamp?.toMillis() ?? 0) - (b.order ?? b.timestamp?.toMillis() ?? 0)),
@@ -285,13 +291,18 @@
     const ExpirariBox = ({ type, data }) => {
         const { dbSectoare, dbMagazine, dbProduse, dbLoturi, expConfigs, updateExpConfig, setView } = useApp();
         const config = expConfigs[type];
-        const [val, setVal] = useState(config.val);
+        const [val, setVal] = useState(config.val === 0 ? '' : config.val);
         const [unit, setUnit] = useState(config.unit);
 
-        const handleConfigChange = (newVal, newUnit) => { setVal(newVal); setUnit(newUnit); updateExpConfig(type, newVal, newUnit); };
+        const handleConfigChange = (newValStr, newUnit) => { 
+            setVal(newValStr); setUnit(newUnit); 
+            let parsedVal = Math.max(0, parseInt(newValStr) || 0);
+            updateExpConfig(type, parsedVal, newUnit); 
+        };
 
         const zileMaxime = useMemo(() => {
-            if(unit === 'saptamani') return val * 7; if(unit === 'luni') return val * 30; return val;
+            let v = parseInt(val) || 0;
+            if(unit === 'saptamani') return v * 7; if(unit === 'luni') return v * 30; return v;
         }, [val, unit]);
 
         const items = useMemo(() => {
@@ -319,7 +330,7 @@
                 <div className="flex justify-between items-center font-bold text-[1.1rem] text-danger flex-wrap gap-2 border-b border-danger/20 pb-3">
                     <span className="flex items-center gap-2"><i className="fas fa-exclamation-circle text-xl"></i> Expiră în curând</span>
                     <div className="flex gap-2 items-center bg-transparent border border-border-color dark:border-dark-border p-1.5 rounded-xl">
-                        <input type="number" min="0" value={val} onChange={e => handleConfigChange(Math.max(0, parseInt(e.target.value)||0), unit)} className="w-[45px] bg-transparent text-center font-bold outline-none text-text-main dark:text-dark-text-main" />
+                        <input type="number" min="0" placeholder="0" value={val} onChange={e => setVal(e.target.value)} onBlur={() => handleConfigChange(val, unit)} className="w-[45px] bg-transparent text-center font-bold outline-none text-text-main dark:text-dark-text-main" />
                         <select value={unit} onChange={e => handleConfigChange(val, e.target.value)} className="bg-transparent dark:bg-dark-surface font-bold outline-none cursor-pointer text-text-main dark:text-white">
                             <option value="zile" className="dark:bg-dark-surface dark:text-white">Zile</option>
                             <option value="saptamani" className="dark:bg-dark-surface dark:text-white">Săpt.</option>
@@ -389,7 +400,7 @@
 
         return (
             <div className="animate-fade-in pb-[100px]">
-                <FrozenHeader title="LIADA" bgColor={CONFIG.COLORS.LIADA_HEADER} actions={<ButtonIcon icon="fas fa-cog text-white" onClick={() => setView({page: PAGES.SETTINGS})} />} />
+                <FrozenHeader title="LIADA" bgColor={CONFIG.COLORS.LIADA_HEADER} actions={<ButtonIcon icon="fas fa-cog text-white" onClick={() => setView({page: PAGES.SETTINGS})} />} nav={<React.Fragment></React.Fragment>} />
                 
                 <div className="p-2" ref={containerRef}>
                     {arrSectoare.length === 0 ? <div className="p-5 text-center text-text-sec font-medium">Nu există sectoare adăugate.</div> : null}
@@ -425,7 +436,7 @@
 
         return (
             <div className="animate-fade-in pb-[100px]">
-                <FrozenHeader title="Setări" bgColor={CONFIG.COLORS.SETTINGS_HEADER} actions={<ButtonIcon icon="fas fa-times text-white" onClick={() => setView({page: PAGES.MAIN})}/>} />
+                <FrozenHeader title="Setări" bgColor={CONFIG.COLORS.SETTINGS_HEADER} actions={<ButtonIcon icon="fas fa-times text-white" onClick={() => setView({page: PAGES.MAIN})}/>} nav={<React.Fragment></React.Fragment>} />
                 
                 <Card><CardRow>
                     <span className="font-bold">Tema Aplicației</span>
@@ -539,7 +550,6 @@
 
         return (
             <div className="animate-fade-in pb-[100px]">
-                {/* Butoanele Inapoi si Acasa mutate in dreapta dupa butonul creion */}
                 <FrozenHeader title={sector.nume} bgColor={sector.culoare || CONFIG.COLORS.DEFAULT_SECTOR} actions={
                     <React.Fragment>
                         <ButtonIcon icon="fas fa-pen text-white" onClick={()=>{ setEditSect({nume: sector.nume, culoare: sector.culoare || CONFIG.COLORS.DEFAULT_SECTOR}); openModal(MODAL_TYPES.EDIT_SECTOR); }}/>
@@ -631,7 +641,6 @@
 
         return (
             <div className="animate-fade-in pb-[100px]">
-                {/* Butoanele Inapoi si Acasa mutate in dreapta dupa creion */}
                 <FrozenHeader title={magazin.nume} subtitle={magazin.adresa} bgColor={magazin.culoare || CONFIG.COLORS.DEFAULT_STORE} actions={
                     <React.Fragment>
                         <ButtonIcon icon="fas fa-pen text-white" onClick={()=>{ setEditStore({nume: magazin.nume, adresa: magazin.adresa, retea: magazin.retea, sectorId: magazin.sectorId}); openModal(MODAL_TYPES.EDIT_STORE); }}/>
@@ -736,66 +745,79 @@
         );
     };
 
-    // --- SUB-COMPONENTA PENTRU RENDERING LOTURI (Previne deplasarea cursorului) ---
+    // --- Sub-componentă curată pentru Rândurile de Loturi ---
     const LotRow = ({ l, isDrojdii, catObj, confirmAction, onUpdate }) => {
-        const [cantitate, setCantitate] = useState(l.cantitate || 0);
+        const [cantitate, setCantitate] = useState(l.cantitate === 0 ? '' : l.cantitate);
         const [dataExp, setDataExp] = useState(l.dataExp || '');
         const [dataProd, setDataProd] = useState(l.dataProd || '');
 
-        useEffect(() => { setCantitate(l.cantitate || 0); }, [l.cantitate]);
+        useEffect(() => { setCantitate(l.cantitate === 0 ? '' : l.cantitate); }, [l.cantitate]);
         useEffect(() => { setDataExp(l.dataExp || ''); }, [l.dataExp]);
         useEffect(() => { setDataProd(l.dataProd || ''); }, [l.dataProd]);
 
         const handleQtyBlur = () => {
-            FirebaseService.update('loturi', l.id, { cantitate: parseInt(cantitate) || 0 });
-            onUpdate();
+            let val = parseInt(cantitate);
+            if (isNaN(val) || val < 0) val = 0;
+            setCantitate(val === 0 ? '' : val);
+            if (val !== l.cantitate) {
+                FirebaseService.update('loturi', l.id, { cantitate: val });
+                onUpdate();
+            }
         };
 
         const handleExpBlur = () => {
-            if (Helpers.convertDataToTime(dataExp) < 8000000000000000) {
+            if (!/^\d{2}\.\d{2}\.\d{4}$/.test(dataExp)) {
+                alert("Format invalid! Introduceți ZZ.LL.AAAA (ex: 15.08.2025)");
+                setDataExp(l.dataExp);
+                return;
+            }
+            if (dataExp !== l.dataExp) {
                 FirebaseService.update('loturi', l.id, { dataExp });
                 onUpdate();
-            } else {
-                alert("Invalid: ZZ.LL.AAAA");
-                setDataExp(l.dataExp);
             }
         };
 
         const handleProdBlur = () => {
-            let expCalc = Helpers.calculeazaExpirare(dataProd, catObj);
-            if (expCalc !== "Dată invalidă") {
-                FirebaseService.update('loturi', l.id, { dataProd, dataExp: expCalc });
-                onUpdate();
-            } else {
-                alert("Invalid: ZZ.LL.AAAA");
+            if (!/^\d{2}\.\d{2}\.\d{4}$/.test(dataProd)) {
+                alert("Format invalid! Introduceți ZZ.LL.AAAA (ex: 15.08.2025)");
                 setDataProd(l.dataProd);
+                return;
+            }
+            if (dataProd !== l.dataProd) {
+                let expCalc = Helpers.calculeazaExpirare(dataProd, catObj);
+                if (expCalc !== "Dată invalidă") {
+                    FirebaseService.update('loturi', l.id, { dataProd, dataExp: expCalc });
+                    onUpdate();
+                } else {
+                    alert("Dată invalidă calculată!");
+                    setDataProd(l.dataProd);
+                }
             }
         };
 
         return (
-            <div className="flex justify-between items-center bg-bg-color dark:bg-dark-bg p-3 rounded-xl mt-3 border border-border-color dark:border-dark-border shadow-sm">
+            <div className="flex justify-between items-center bg-bg-color dark:bg-dark-bg p-2.5 rounded-xl mt-3 border border-border-color dark:border-dark-border shadow-sm">
                 <div className="flex flex-col items-center">
-                    <span className="text-[0.75rem] font-bold text-text-sec uppercase">Buc</span>
-                    <input type="number" min="0" value={cantitate} onChange={e => setCantitate(Math.max(0, parseInt(e.target.value)||0))} onBlur={handleQtyBlur} className="w-[55px] text-center p-1 mt-1 font-black text-[1.1rem] border border-border-color dark:border-dark-border rounded-lg bg-surface-color dark:bg-dark-surface text-text-main dark:text-white" />
+                    <span className="text-[0.7rem] font-bold text-text-sec uppercase">Buc</span>
+                    <input type="number" min="0" placeholder="0" value={cantitate} onChange={e => setCantitate(e.target.value)} onBlur={handleQtyBlur} className="w-[50px] text-center p-1 mt-1 font-black text-[1.05rem] border border-border-color dark:border-dark-border rounded-lg bg-surface-color dark:bg-dark-surface text-text-main dark:text-white outline-none focus:border-accent" />
                 </div>
-                {/* S-a mărit dimensiunea chenarului la w-[130px] ca să nu taie nicio cifră */}
-                <div className="flex flex-col items-center px-2">
-                    <span className="text-[0.75rem] font-bold text-text-sec uppercase">Expiră pe</span>
+                <div className="flex flex-col items-center px-1">
+                    <span className="text-[0.7rem] font-bold text-text-sec uppercase">Expiră pe</span>
                     {isDrojdii ? (
-                        <input type="text" value={dataExp} onChange={e => setDataExp(e.target.value)} onBlur={handleExpBlur} className="text-danger font-black w-[130px] text-center p-1 mt-1 border border-border-color dark:border-dark-border rounded-lg bg-surface-color dark:bg-dark-surface outline-none focus:border-accent" />
+                        <input type="text" value={dataExp} onChange={e => setDataExp(e.target.value)} onBlur={handleExpBlur} className="text-danger font-black w-[95px] text-center p-1 mt-1 text-[0.95rem] tracking-tighter border border-border-color dark:border-dark-border rounded-lg bg-surface-color dark:bg-dark-surface outline-none focus:border-accent" />
                     ) : (
-                        <strong className="text-danger font-black text-[1.1rem] mt-2">{dataExp}</strong>
+                        <strong className="text-danger font-black text-[1rem] mt-2 tracking-tighter">{dataExp}</strong>
                     )}
                 </div>
-                <div className="flex flex-col items-center">
-                    <span className="text-[0.75rem] font-bold text-text-sec uppercase">Data Prod.</span>
+                <div className="flex flex-col items-center px-1">
+                    <span className="text-[0.7rem] font-bold text-text-sec uppercase">Data Prod.</span>
                     {isDrojdii ? (
-                        <span className="text-[0.9rem] font-bold text-border-color mt-2">N/A</span>
+                        <span className="text-[0.85rem] font-bold text-border-color mt-2">N/A</span>
                     ) : (
-                        <input type="text" value={dataProd} onChange={e => setDataProd(e.target.value)} onBlur={handleProdBlur} className="w-[130px] text-center p-1 mt-1 font-bold border border-border-color dark:border-dark-border rounded-lg bg-surface-color dark:bg-dark-surface text-text-main dark:text-white outline-none focus:border-accent" />
+                        <input type="text" value={dataProd} onChange={e => setDataProd(e.target.value)} onBlur={handleProdBlur} className="w-[95px] text-center p-1 mt-1 font-bold text-[0.95rem] tracking-tighter border border-border-color dark:border-dark-border rounded-lg bg-surface-color dark:bg-dark-surface text-text-main dark:text-white outline-none focus:border-accent" />
                     )}
                 </div>
-                <ButtonDanger icon="fas fa-times-circle" className="!text-[1.4rem]" onClick={() => confirmAction("Șterge Lot", "Sigur?", () => { FirebaseService.delete('loturi', l.id); onUpdate(); })} />
+                <ButtonDanger icon="fas fa-times-circle" className="!text-[1.3rem] !p-1" onClick={() => confirmAction("Șterge Lot", "Sigur?", () => { FirebaseService.delete('loturi', l.id); onUpdate(); })} />
             </div>
         );
     };
@@ -803,7 +825,6 @@
     const ProductPage = () => {
         const { view, setView, catalogCategorii, dbMagazine, dbProduse, dbLoturi, confirmAction, modal, openModal, closeModal } = useApp();
         
-        // Sincronizare perfectă a magazinului indiferent de unde este accesat produsul
         const rawProd = view.data;
         const prod = { ...rawProd, ...(dbProduse[rawProd.id] || {}) }; 
         const activeMag = dbMagazine[prod.magazinId] || { nume: prod.magazinNume, adresa: prod.magazinAdresa, culoare: prod.magazinCuloare };
@@ -824,8 +845,9 @@
 
         const totalVitrina = loturiCurente.reduce((sum, l) => sum + (parseInt(l.cantitate)||0), 0);
         
-        const [stocMan, setStocMan] = useState(prod.stocManual || '');
-        useEffect(() => { setStocMan(prod.stocManual || ''); }, [prod.stocManual]);
+        // Stoc Manual & Depozit (Inițializare smart pt 0 gol)
+        const [stocMan, setStocMan] = useState(prod.stocManual === 0 ? '' : (prod.stocManual || ''));
+        useEffect(() => { setStocMan(prod.stocManual === 0 ? '' : (prod.stocManual || '')); }, [prod.stocManual]);
 
         const [depozit, setDepozit] = useState(prod.depozit || '');
         useEffect(() => { setDepozit(prod.depozit || ''); }, [prod.depozit]);
@@ -835,8 +857,11 @@
 
         const [newLot, setNewLot] = useState({ qty: '', data: '' });
 
-        // Indicator pentru ultima modificare efectuata
-        const [actualizatData, setActualizatData] = useState(() => new Date().toLocaleDateString('ro-RO'));
+        const [actualizatData, setActualizatData] = useState(() => {
+            const acum = new Date();
+            return acum.toLocaleDateString('ro-RO') + ' ' + acum.toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'});
+        });
+        
         const triggerUpdate = () => {
             const acum = new Date();
             setActualizatData(acum.toLocaleDateString('ro-RO') + ' ' + acum.toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'}));
@@ -844,7 +869,6 @@
         
         return (
             <div className="animate-fade-in pb-[100px]">
-                {/* Butoanele Inapoi si Acasa poziționate corect în dreapta antetului */}
                 <FrozenHeader title={prod.nume} subtitle={`${activeMag.nume} - ${activeMag.adresa}`} bgColor={activeMag.culoare || CONFIG.COLORS.DEFAULT_STORE} actions={
                     <React.Fragment>
                         <ButtonIcon icon="fas fa-arrow-left text-white" onClick={()=>setView({page: PAGES.STORE, data: prod.backData || { magazin: activeMag, sector: { id: activeMag.sectorId, nume: 'Sector' } }})}/>
@@ -858,7 +882,7 @@
                         placeholder="Notițe de făcut..." rows="2"
                         value={notite}
                         onChange={(e) => setNotite(e.target.value)}
-                        onBlur={() => FirebaseService.update('produse_magazin', prod.id, { notite })}
+                        onBlur={() => { FirebaseService.update('produse_magazin', prod.id, { notite }); triggerUpdate(); }}
                     ></textarea>
                 </Card>
 
@@ -866,13 +890,12 @@
                     <div className="font-black text-[1.2rem] mb-2">Cantitatea</div>
                     <CardRow className="!py-1">
                         <span className="font-bold">Depozit:</span> 
-                        {/* Permite acum text liber */}
                         <Input 
                             type="text" 
                             className="!w-[50%] !m-0 !p-2 !text-center font-bold text-text-main dark:text-white" 
                             value={depozit}
                             onChange={e=>setDepozit(e.target.value)}
-                            onBlur={()=>FirebaseService.update('produse_magazin', prod.id, { depozit })}
+                            onBlur={()=>{ FirebaseService.update('produse_magazin', prod.id, { depozit }); triggerUpdate(); }}
                         />
                     </CardRow>
                     <div className="grid grid-cols-2 gap-3 mt-4">
@@ -883,8 +906,18 @@
                         <div className="bg-bg-color dark:bg-dark-bg p-3 rounded-xl text-center border border-border-color dark:border-dark-border shadow-sm">
                             <span className="block text-[0.8rem] font-bold text-text-sec uppercase tracking-wide mb-1">Stoc (Manual)</span>
                             <div className="flex items-center justify-center gap-1 mt-1">
-                                {/* Permite text liber */}
-                                <input type="text" placeholder="Notă stoc..." className="w-[60%] text-center border-none bg-transparent font-black text-[1.1rem] text-text-main dark:text-white outline-none" value={stocMan} onChange={e=>setStocMan(e.target.value)} onBlur={()=>FirebaseService.update('produse_magazin', prod.id, { stocManual: stocMan })} />
+                                <input 
+                                    type="number" min="0" placeholder="0" 
+                                    className="w-[60%] text-center border-none bg-transparent font-black text-[1.4rem] text-text-main dark:text-white outline-none" 
+                                    value={stocMan} 
+                                    onChange={e=>setStocMan(e.target.value)} 
+                                    onBlur={()=>{ 
+                                        let val = parseInt(stocMan); if(isNaN(val)||val<0) val=0; 
+                                        setStocMan(val===0?'':val); 
+                                        FirebaseService.update('produse_magazin', prod.id, { stocManual: val }); 
+                                        triggerUpdate();
+                                    }} 
+                                />
                                 <button onClick={()=>{if(stocMan)alert(`Salvat! Stoc: ${stocMan}`);}} className="text-white bg-[#0088cc] rounded-lg p-[8px_12px] shadow-md"><i className="fas fa-paper-plane"></i></button>
                             </div>
                         </div>
@@ -895,7 +928,7 @@
                     <div className="flex justify-between items-center font-black text-[1.2rem] mb-2">
                         Loturi Valabilitate
                         <div className="flex items-center gap-2">
-                            <span className="text-[0.75rem] font-bold text-text-sec bg-gray-100 dark:bg-gray-800 p-1.5 rounded-lg">Actualizat - {actualizatData}</span>
+                            <span className="text-[0.7rem] font-bold text-text-sec bg-gray-100 dark:bg-gray-800 p-1.5 rounded-lg tracking-tight">Act - {actualizatData}</span>
                             <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-100 dark:!bg-blue-900/50 !rounded-full !p-[6px_8px] !text-[1rem]" onClick={() => { setNewLot({qty: '', data: ''}); openModal(MODAL_TYPES.ADD_LOT); }} />
                         </div>
                     </div>
@@ -908,13 +941,14 @@
 
                 <BaseModal isOpen={modal.type === MODAL_TYPES.ADD_LOT} title="Adaugă Lot Nou">
                     <Input type="number" min="0" placeholder="Cantitate (opțional)" value={newLot.qty} onChange={e=>setNewLot({...newLot, qty:e.target.value})} />
-                    <div className="flex gap-[10px] items-center mt-2 relative w-full">
-                        <Input placeholder="Data (ZZ.LL.AAAA)" value={newLot.data} onChange={e=>setNewLot({...newLot, data:e.target.value})} />
-                        {/* Label-ul ascunde inputul nativ și scoate literele, lăsând doar pictograma calendarului */}
-                        <label className="flex items-center justify-center p-3 border border-border-color dark:border-dark-border rounded-xl bg-bg-color dark:bg-dark-bg text-accent h-[50px] mt-1 cursor-pointer min-w-[50px]">
+                    <div className="flex gap-[10px] items-center mt-2 w-full">
+                        <Input placeholder="Data (ZZ.LL.AAAA)" value={newLot.data} onChange={e=>setNewLot({...newLot, data:e.target.value})} className="flex-1" />
+                        <label className="relative flex items-center justify-center p-3 border border-border-color dark:border-dark-border rounded-xl bg-bg-color dark:bg-dark-bg text-accent h-[50px] mt-1 cursor-pointer w-[50px] flex-shrink-0">
                             <i className="fas fa-calendar-alt text-xl"></i>
-                            <input type="date" className="hidden" onChange={e=>{
-                                if(!e.target.value) return; let d=new Date(e.target.value); setNewLot({...newLot, data: `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`});
+                            <input type="date" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={e=>{
+                                if(!e.target.value) return; 
+                                let d=new Date(e.target.value); 
+                                setNewLot({...newLot, data: `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`});
                             }} />
                         </label>
                     </div>
@@ -925,6 +959,10 @@
                         <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
                         <PrimaryButton onClick={()=>{
                             if(newLot.data) {
+                                if (!/^\d{2}\.\d{2}\.\d{4}$/.test(newLot.data)) {
+                                    alert("Format invalid! Introduceți ZZ.LL.AAAA (ex: 15.08.2025)");
+                                    return;
+                                }
                                 let valQ = parseInt(newLot.qty); if(isNaN(valQ) || valQ < 0) valQ = 0;
                                 let expStr = isDrojdii ? newLot.data : Helpers.calculeazaExpirare(newLot.data, catObj);
                                 let prodStr = isDrojdii ? "N/A" : newLot.data;
