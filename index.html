@@ -337,42 +337,43 @@
             return () => unsubAuth();
         }, []);
 
-        const gSignIn = async () => {
+       const gSignIn = async () => {
     try {
+        // 1. Ne delogăm forțat înainte de a cere acces, pentru a uita setările vechi
+        await firebase.auth().signOut();
+        
         const provider = new firebase.auth.GoogleAuthProvider();
+        
+        // 2. Cerem explicit permisiunea de Sheets
         provider.addScope('https://www.googleapis.com/auth/spreadsheets');
         
-        // Forțăm deschiderea ferestrei de permisiuni din nou
+        // 3. Forțăm Google să ne întrebe din nou (prompt: 'consent')
         provider.setCustomParameters({ prompt: 'consent' });
 
-        // Aici am lăsat o singură dată "const result"
+        // 4. Deschidem pop-up-ul
         const result = await firebase.auth().signInWithPopup(provider);
         
-        // --- COD DE DEBUG ---
-        console.log("Rezultat complet de la Google:", result);
+        // 5. Extragem credențialele
         const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
-        console.log("Obiectul credential:", credential);
-        // --------------------
+        
+        // DEBUG: Vedem dacă acum vine ceva
+        console.log("Obiectul credential primit:", credential);
         
         const token = credential ? credential.accessToken : null;
 
         if (token) {
             setGToken(token);
             localStorage.setItem('g_access_token', token);
+            console.log("Succes! Am primit token-ul:", token);
             return token;
         } else {
-            console.warn("Token-ul este null. Verifică în consolă ce scrie la 'Obiectul credential'.");
-            alert("Nu s-a putut obține permisiunea pentru Google Sheets. Verifică în consolă (F12) erorile.");
+            console.error("Token-ul este null. Google nu a trimis permisiunile de Sheets.");
+            alert("Nu s-a putut obține permisiunea pentru Sheets. Verifică tab-ul Console (F12).");
             return null;
         }
     } catch (err) {
-        console.error("Autentificare Google eșuată:", err);
-        // Alerte specifice
-        if (err.code === 'auth/popup-blocked') {
-            alert("Eroare: Browser-ul a blocat fereastra pop-up.");
-        } else {
-            alert("Eroare la conectare: " + err.message);
-        }
+        console.error("Eroare gravă:", err);
+        alert("Eroare: " + err.message);
         throw err;
     }
 };
