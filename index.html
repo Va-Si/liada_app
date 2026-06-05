@@ -1454,11 +1454,16 @@
             setLoading(true);
             const unsubscribe = db.collection('poze_magazine')
                 .where('magazinId', '==', magazinId)
-                .orderBy('timestamp', 'desc')
                 .onSnapshot(snapshot => {
                     const list = [];
                     snapshot.forEach(doc => {
                         list.push({ id: doc.id, ...doc.data() });
+                    });
+                    // Sortare locală pentru a evita eroarea de index compus în Firestore
+                    list.sort((a, b) => {
+                        const tA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp || 0);
+                        const tB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp || 0);
+                        return tB - tA;
                     });
                     setPhotos(list);
                     setLoading(false);
