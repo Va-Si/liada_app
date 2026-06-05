@@ -337,47 +337,36 @@
             return () => unsubAuth();
         }, []);
 
-       const gSignIn = async () => {
+      import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth"; // Adaugă asta sus în fișier
+
+const gSignIn = async () => {
     try {
-        // 1. Ne delogăm forțat înainte de a cere acces, pentru a uita setările vechi
-        await firebase.auth().signOut();
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
         
-        const provider = new firebase.auth.GoogleAuthProvider();
-        
-        // 2. Cerem explicit permisiunea de Sheets
+        // 1. Aici adăugăm scope-ul (permisiunea pentru Sheets)
         provider.addScope('https://www.googleapis.com/auth/spreadsheets');
-        
-        // 3. Forțăm Google să ne întrebe din nou (prompt: 'consent')
         provider.setCustomParameters({ prompt: 'consent' });
 
-        // 4. Deschidem pop-up-ul
-        const result = await firebase.auth().signInWithPopup(provider);
+        // 2. Autentificarea v9
+        const result = await signInWithPopup(auth, provider);
         
-        // 5. Extragem credențialele
-        const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
-        
-        // DEBUG: Vedem dacă acum vine ceva
-        console.log("Obiectul credential primit:", credential);
-        
-        const token = credential ? credential.accessToken : null;
+        // 3. Extragerea token-ului
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        const token = credential.accessToken;
 
         if (token) {
-            setGToken(token);
             localStorage.setItem('g_access_token', token);
-            console.log("Succes! Am primit token-ul:", token);
             return token;
         } else {
-            console.error("Token-ul este null. Google nu a trimis permisiunile de Sheets.");
-            alert("Nu s-a putut obține permisiunea pentru Sheets. Verifică tab-ul Console (F12).");
-            return null;
+            throw new Error("Token-ul este gol");
         }
     } catch (err) {
-        console.error("Eroare gravă:", err);
-        alert("Eroare: " + err.message);
-        throw err;
+        console.error("Eroare:", err);
+        alert("Eroare la conectare: " + err.message);
+        return null;
     }
 };
-
         const gSignOut = async () => {
             try {
                 await firebase.auth().signOut();
