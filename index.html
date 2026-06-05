@@ -2,7 +2,7 @@
 <html lang="ro">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no border-box">
     <title>LIADA - Mercantizare (Arhitectură Pro)</title>
     
     <link rel="manifest" href="manifest.json">
@@ -866,7 +866,6 @@
 
         const totalVitrina = loturiCurente.reduce((sum, l) => sum + (parseInt(l.cantitate)||0), 0);
         
-        // Stoc Manual & Depozit (Inițializare smart pt 0 gol)
         const [stocMan, setStocMan] = useState(prod.stocManual === 0 ? '' : (prod.stocManual || ''));
         useEffect(() => { setStocMan(prod.stocManual === 0 ? '' : (prod.stocManual || '')); }, [prod.stocManual]);
 
@@ -1026,7 +1025,7 @@
                 {view.page === PAGES.STORE && <StorePage />}
                 {view.page === PAGES.PRODUCT && <ProductPage />}
 
-                {/* GLOBAL MODALS (Prompt, Confirm, Editare globală rețea) */}
+                {/* GLOBAL MODALS */}
                 <BaseModal isOpen={modal.type === MODAL_TYPES.EDIT_RET} title="Editează Rețea">
                     <Input placeholder="Nume" value={editRetState.nume} onChange={e=>setEditRetState({...editRetState, nume:e.target.value})} />
                     <Input type="color" value={editRetState.culoare} onChange={e=>setEditRetState({...editRetState, culoare:e.target.value})} className="!h-[50px] !p-[3px] cursor-pointer" />
@@ -1061,8 +1060,7 @@
                     <div className="flex gap-3 pt-5">
                         <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
                         <PrimaryButton onClick={()=>{
-                            let inputEl = document.getElementById('prompt-input');
-                            let val = inputEl ? inputEl.value.trim() : '';
+                            let val = document.getElementById('prompt-input').value.trim();
                             if(modal.data?.onSave) modal.data.onSave(val); 
                             closeModal();
                         }}>Salvează</PrimaryButton>
