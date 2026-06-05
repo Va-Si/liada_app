@@ -2,7 +2,7 @@
 <html lang="ro">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no border-box">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>LIADA - Mercantizare (Arhitectură Pro)</title>
     
     <link rel="manifest" href="manifest.json">
@@ -34,10 +34,6 @@
         }
     </script>
 
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
@@ -47,7 +43,11 @@
 </head>
 <body class="bg-bg-color dark:bg-dark-bg text-text-main dark:text-dark-text-main transition-colors duration-300 m-0">
 
-<div id="root" class="max-w-[600px] mx-auto min-h-screen relative shadow-2xl bg-bg-color dark:bg-dark-bg"></div>
+<div id="root" class="max-w-[480px] mx-auto min-h-screen relative shadow-2xl bg-bg-color dark:bg-dark-bg"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
 <script type="text/babel">
     const { useState, useEffect, useMemo, useRef, createContext, useContext } = React;
@@ -89,6 +89,16 @@
         ADD_RET: 'add_ret', EDIT_RET: 'edit_ret', ADD_PROP: 'add_prop'
     };
 
+    const PREFERRED_CAT_ORDER = [
+        "Maioneză - pachete",
+        "Maioneze - căldări",
+        "Ketchup",
+        "Paste de tomat",
+        "Muștar",
+        "Oțet",
+        "Drojdii"
+    ];
+
     const CONFIG = {
         COLORS: { LIADA_HEADER: '#ff3b30', SETTINGS_HEADER: '#333333', DEFAULT_SECTOR: '#007aff', DEFAULT_STORE: '#4CAF50' },
         DEFAULT_CATALOG: {
@@ -109,8 +119,8 @@
     // ==========================================
     const Helpers = {
         convertDataToTime: (dateStr) => {
-            if(!dateStr || dateStr === "Dată invalidă" || dateStr === "Calculată" || dateStr === "N/A") return new Date(8640000000000000).getTime();
-            let parts = dateStr.split('.'); if(parts.length !== 3) return new Date(8640000000000000).getTime();
+            if(!dateStr || dateStr === "Dată invalidă" || dateStr === "Calculată" || dateStr === "N/A" || typeof dateStr !== "string") return new Date(8640000000000000).getTime();
+            let parts = dateStr.trim().split('.'); if(parts.length !== 3) return new Date(8640000000000000).getTime();
             return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
         },
         calculeazaExpirare: (dataProdStr, categorieObj) => {
@@ -158,19 +168,19 @@
     const SecondaryButton = ({ children, onClick, className="" }) => <button onClick={onClick} className={`flex-1 p-4 font-[900] text-text-sec uppercase text-[0.8rem] bg-gray-100 dark:bg-gray-800 rounded-xl hover:opacity-80 transition-colors ${className}`}>{children}</button>;
     const DangerButton = ({ children, onClick, className="" }) => <button onClick={onClick} className={`flex-[2] p-4 font-[900] text-white uppercase text-[0.8rem] bg-danger rounded-xl shadow-lg transition-colors ${className}`}>{children}</button>;
 
-    const ButtonIcon = ({ icon, onClick, className = "", style }) => <button onClick={onClick} className={`bg-transparent border-none text-xl p-2 cursor-pointer ${className}`} style={style}><i className={icon}></i></button>;
-    const ButtonDanger = ({ icon, onClick, className = "" }) => <button onClick={onClick} className={`bg-transparent border-none text-danger text-[1.2rem] cursor-pointer p-1 ${className}`}><i className={icon}></i></button>;
+    const ButtonIcon = ({ icon, onClick, className = "", style }) => <button onClick={onClick} className={`bg-transparent border-none text-xl p-2 cursor-pointer flex justify-center items-center ${className}`} style={style}><i className={icon}></i></button>;
+    const ButtonDanger = ({ icon, onClick, className = "" }) => <button onClick={onClick} className={`bg-transparent border-none text-danger text-[1.2rem] cursor-pointer p-1 flex justify-center items-center ${className}`}><i className={icon}></i></button>;
     
     const Input = (props) => <input {...props} className={`w-full p-3 mt-1 border border-border-color dark:border-dark-border rounded-xl bg-bg-color dark:bg-dark-bg text-text-main dark:text-white outline-none focus:border-accent font-medium ${props.className || ''}`} />;
     const Select = (props) => <select {...props} className={`w-full p-3 mt-1 border border-border-color dark:border-dark-border rounded-xl bg-bg-color dark:bg-dark-bg text-text-main dark:text-white outline-none focus:border-accent font-medium ${props.className || ''}`}>{props.children}</select>;
 
-    const Card = ({ children, className = "", onClick, style, id }) => <div id={id} onClick={onClick} style={style} className={`bg-surface-color dark:bg-dark-surface m-4 p-4 rounded-[15px] shadow-sm relative transition-all ${onClick ? 'cursor-pointer active:scale-[0.98]' : ''} ${className}`}>{children}</div>;
+    const Card = ({ children, className = "", onClick, style, id }) => <div id={id} onClick={onClick} style={style} className={`bg-surface-color dark:bg-dark-surface mx-4 my-2.5 p-4 rounded-[15px] shadow-sm relative transition-all ${onClick ? 'cursor-pointer active:scale-[0.98]' : ''} ${className}`}>{children}</div>;
     const CardRow = ({ children, className = "", onClick }) => <div onClick={onClick} className={`flex justify-between items-center py-2.5 border-b border-border-color dark:border-dark-border last:border-b-0 ${onClick ? 'cursor-pointer' : ''} ${className}`}>{children}</div>;
 
     const FAB = ({ onClick }) => <button onClick={onClick} className="fixed bottom-[30px] right-[30px] w-[64px] h-[64px] rounded-full bg-surface-color/90 dark:bg-dark-surface/90 backdrop-blur-md text-accent border border-border-color dark:border-dark-border text-[1.8rem] shadow-lg cursor-pointer z-[99] flex justify-center items-center hover:scale-105 transition-transform"><i className="fas fa-plus"></i></button>;
 
     const FrozenHeader = ({ title, subtitle, bgColor, actions, nav }) => (
-        <div className="sticky top-2.5 m-2.5 p-[15px_20px] rounded-[25px] flex flex-col gap-2 z-[100] shadow-lg text-white backdrop-blur-md" style={{ backgroundColor: bgColor }}>
+        <div className="sticky top-2.5 mx-4 my-2.5 p-[15px_20px] rounded-[25px] flex flex-col gap-2 z-[100] shadow-lg text-white backdrop-blur-md" style={{ backgroundColor: bgColor }}>
             <div className="flex justify-between items-center border-b border-white/30 pb-1.5">
                 <div>
                     <h2 className="m-0 text-[1.6rem] font-[900] leading-tight text-white">{title}</h2>
@@ -211,18 +221,32 @@
         const [dbProduse, setDbProduse] = useState({});
         const [dbLoturi, setDbLoturi] = useState({});
 
-        const [catalogCategorii, setCatalogCategorii] = useState(JSON.parse(localStorage.getItem('catalogCategorii')) || CONFIG.DEFAULT_CATALOG);
-        const [reteleMagazine, setReteleMagazine] = useState(JSON.parse(localStorage.getItem('reteleMagazine')) || CONFIG.DEFAULT_RETELE);
-        const [proprietatiMagazine, setProprietatiMagazine] = useState(JSON.parse(localStorage.getItem('proprietatiMagazine')) || CONFIG.DEFAULT_PROPS);
+        // Setări Globale cu stocare în Firestore ca sursă unică a adevărului (pentru sincronizare multi-device)
+        const [catalogCategorii, setCatalogCategorii] = useState(CONFIG.DEFAULT_CATALOG);
+        const [reteleMagazine, setReteleMagazine] = useState(CONFIG.DEFAULT_RETELE);
+        const [proprietatiMagazine, setProprietatiMagazine] = useState(CONFIG.DEFAULT_PROPS);
         
         const getExpConf = (lvl, defVal, defUnit) => ({ val: Math.max(0, parseInt(localStorage.getItem(`expTimeVal_${lvl}`)) || defVal), unit: localStorage.getItem(`expTimeUnit_${lvl}`) || defUnit });
         const [expConfigs, setExpConfigs] = useState({ global: getExpConf('global', 2, 'luni'), sector: getExpConf('sector', 1, 'luni'), store: getExpConf('store', 2, 'saptamani') });
 
-        // Storage Updates
-        const updateCatalog = (newCat) => { setCatalogCategorii(newCat); localStorage.setItem('catalogCategorii', JSON.stringify(newCat)); };
-        const updateRetele = (newRet) => { setReteleMagazine(newRet); localStorage.setItem('reteleMagazine', JSON.stringify(newRet)); };
-        const updateProp = (newProp) => { setProprietatiMagazine(newProp); localStorage.setItem('proprietatiMagazine', JSON.stringify(newProp)); };
-        const updateExpConfig = (type, val, unit) => { localStorage.setItem(`expTimeVal_${type}`, val); localStorage.setItem(`expTimeUnit_${type}`, unit); setExpConfigs(prev => ({ ...prev, [type]: { val, unit } })); };
+        // Storage Updates - salvează acum direct în Firestore config_global, nu în localStorage!
+        const updateCatalog = (newCat) => { 
+            db.collection('setari').doc('config_global').set({ catalogCategorii: newCat }, { merge: true })
+              .catch(err => console.error("Error writing catalog:", err));
+        };
+        const updateRetele = (newRet) => { 
+            db.collection('setari').doc('config_global').set({ reteleMagazine: newRet }, { merge: true })
+              .catch(err => console.error("Error writing retele:", err));
+        };
+        const updateProp = (newProp) => { 
+            db.collection('setari').doc('config_global').set({ proprietatiMagazine: newProp }, { merge: true })
+              .catch(err => console.error("Error writing properties:", err));
+        };
+        const updateExpConfig = (type, val, unit) => { 
+            localStorage.setItem(`expTimeVal_${type}`, val); 
+            localStorage.setItem(`expTimeUnit_${type}`, unit); 
+            setExpConfigs(prev => ({ ...prev, [type]: { val, unit } })); 
+        };
 
         // Modal Helpers
         const openModal = (type, data = null) => setModal({ type, data });
@@ -240,14 +264,38 @@
             localStorage.setItem('theme', theme);
         }, [theme]);
 
-        // Firebase Sync
+        // Firebase Realtime Sync pentru Date Aplicație & Setări Globale
         useEffect(() => {
-            let loads = 0; const checkReady = () => { loads++; if(loads === 4) setTimeout(() => setIsReady(true), 300); };
+            let loads = 0; 
+            const checkReady = () => { loads++; if(loads === 5) setTimeout(() => setIsReady(true), 300); };
+            
             const u1 = db.collection('sectoare').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbSectoare(obj); checkReady(); }, err => console.error(err));
             const u2 = db.collection('magazine').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbMagazine(obj); checkReady(); }, err => console.error(err));
             const u3 = db.collection('produse_magazin').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbProduse(obj); checkReady(); }, err => console.error(err));
             const u4 = db.collection('loturi').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbLoturi(obj); checkReady(); }, err => console.error(err));
-            return () => { u1(); u2(); u3(); u4(); };
+            
+            // Ascultăm în timp real documentul global de setări din Firestore pentru sincronizare universală (mobil <-> desktop)
+            const u5 = db.collection('setari').doc('config_global').onSnapshot(doc => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    if (data.catalogCategorii) setCatalogCategorii(data.catalogCategorii);
+                    if (data.reteleMagazine) setReteleMagazine(data.reteleMagazine);
+                    if (data.proprietatiMagazine) setProprietatiMagazine(data.proprietatiMagazine);
+                } else {
+                    // Dacă e prima dată când pornește pe acel Firestore, inițializăm documentul cu CONFIG
+                    db.collection('setari').doc('config_global').set({
+                        catalogCategorii: CONFIG.DEFAULT_CATALOG,
+                        reteleMagazine: CONFIG.DEFAULT_RETELE,
+                        proprietatiMagazine: CONFIG.DEFAULT_PROPS
+                    }).catch(err => console.error("Initial config setup failed", err));
+                }
+                checkReady();
+            }, err => {
+                console.error("Settings listener error, fallback to defaults/localStorage:", err);
+                checkReady();
+            });
+
+            return () => { u1(); u2(); u3(); u4(); u5(); };
         }, []);
 
         // History API (Swipe Back logic)
@@ -421,10 +469,11 @@
             <div className="animate-fade-in pb-[100px]">
                 <FrozenHeader title="LIADA" bgColor={CONFIG.COLORS.LIADA_HEADER} actions={<ButtonIcon icon="fas fa-cog text-white" onClick={() => setView({page: PAGES.SETTINGS})} />} nav={<React.Fragment></React.Fragment>} />
                 
-                <div className="p-2" ref={containerRef}>
+                {/* w-full face ca chenarele sectoarelor să aibă exact aceeași lățime/margini ca și headerul Freeze 'LIADA' */}
+                <div className="w-full" ref={containerRef}>
                     {arrSectoare.length === 0 ? <div className="p-5 text-center text-text-sec font-medium">Nu există sectoare adăugate.</div> : null}
                     {arrSectoare.map(s => (
-                        <Card key={s.id} onClick={() => setView({page: PAGES.SECTOR, data: s})} className="text-white !p-0 overflow-hidden !rounded-[25px]" style={{backgroundColor: s.culoare || CONFIG.COLORS.DEFAULT_SECTOR}}>
+                        <Card key={s.id} onClick={() => setView({page: PAGES.SECTOR, data: s})} className="text-white !p-0 overflow-hidden !rounded-[25px] !shadow-md transition-transform" style={{backgroundColor: s.culoare || CONFIG.COLORS.DEFAULT_SECTOR}}>
                             <div className="flex justify-between items-center p-[20px] font-black text-[1.2rem]">
                                 {s.nume}
                                 <ButtonIcon icon="fas fa-trash text-white" onClick={(e) => { e.stopPropagation(); confirmAction("Ștergere", "Ștergi sectorul?", () => FirebaseService.delete('sectoare', s.id)); }} />
@@ -453,6 +502,34 @@
         const [newRet, setNewRet] = useState({ nume: '', culoare: CONFIG.COLORS.DEFAULT_SECTOR });
         const [newProp, setNewProp] = useState('');
 
+        // Sortăm categoriile conform standardului preferat cerut de client
+        const sortedCategories = useMemo(() => {
+            return Object.entries(catalogCategorii).sort(([catAName], [catBName]) => {
+                let indexA = PREFERRED_CAT_ORDER.indexOf(catAName);
+                let indexB = PREFERRED_CAT_ORDER.indexOf(catBName);
+                if (indexA === -1) indexA = 999;
+                if (indexB === -1) indexB = 999;
+                return indexA - indexB;
+            });
+        }, [catalogCategorii]);
+
+        // Schimbă ordinea produselor în interiorul categoriei în Setări
+        const moveProduct = (catName, index, direction) => {
+            let c = { ...catalogCategorii };
+            let arr = [...c[catName].produse];
+            if (direction === 'up' && index > 0) {
+                let temp = arr[index];
+                arr[index] = arr[index - 1];
+                arr[index - 1] = temp;
+            } else if (direction === 'down' && index < arr.length - 1) {
+                let temp = arr[index];
+                arr[index] = arr[index + 1];
+                arr[index + 1] = temp;
+            }
+            c[catName].produse = arr;
+            updateCatalog(c);
+        };
+
         return (
             <div className="animate-fade-in pb-[100px]">
                 <FrozenHeader title="Setări" bgColor={CONFIG.COLORS.SETTINGS_HEADER} actions={<ButtonIcon icon="fas fa-times text-white" onClick={() => setView({page: PAGES.MAIN})}/>} nav={<React.Fragment></React.Fragment>} />
@@ -480,17 +557,51 @@
                     ))}
                 </Card>
 
+                {/* Detalii magazine cu editare creion */}
                 <Card>
                     <div className="flex justify-between items-center font-bold text-[1.1rem] mb-2">Detalii magazine <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-50 dark:!bg-blue-900/30 !rounded-full" onClick={() => { setNewProp(''); openModal(MODAL_TYPES.ADD_PROP); }}/></div>
                     {proprietatiMagazine.map((p, i) => (
-                        <CardRow key={i}>Câmp: {p} <ButtonDanger icon="fas fa-trash" onClick={() => confirmAction("Șterge câmp", "Sigur?", () => { let np = [...proprietatiMagazine]; np.splice(i,1); updateProp(np); })}/></CardRow>
+                        <CardRow key={i}>
+                            <span className="font-semibold">{p}</span>
+                            <div className="flex gap-2">
+                                <ButtonIcon icon="fas fa-pen" className="!text-accent !text-[1rem] !p-1" onClick={() => promptAction("Schimbă Nume Câmp", p, "Ex: Telefon", (newName) => {
+                                    if(newName && newName !== p){
+                                        let np = [...proprietatiMagazine];
+                                        np[i] = newName;
+                                        updateProp(np);
+                                        
+                                        // Modificăm cheia din documentele magazinelor din Firestore pentru păstrarea datelor introduse anterior
+                                        db.collection('magazine').get().then(snap => {
+                                            let batch = db.batch();
+                                            let modified = false;
+                                            snap.forEach(doc => {
+                                                let data = doc.data();
+                                                if(data.proprietati && data.proprietati[p] !== undefined) {
+                                                    let props = { ...data.proprietati };
+                                                    props[newName] = props[p];
+                                                    delete props[p];
+                                                    batch.update(doc.ref, { proprietati: props });
+                                                    modified = true;
+                                                }
+                                            });
+                                            if(modified) batch.commit();
+                                        }).catch(err => console.error("Properties shift error:", err));
+                                    }
+                                })} />
+                                <ButtonDanger icon="fas fa-trash" onClick={() => confirmAction("Șterge câmp", `Sigur elimini câmpul "${p}" de la magazin?`, () => { 
+                                    let np = [...proprietatiMagazine]; 
+                                    np.splice(i,1); 
+                                    updateProp(np); 
+                                })}/>
+                            </div>
+                        </CardRow>
                     ))}
                 </Card>
 
                 <Card>
                     <div className="flex justify-between items-center font-bold text-[1.1rem] mb-2">Produse & Valabilitate <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-50 dark:!bg-blue-900/30 !rounded-full" onClick={() => promptAction("Categorie Nouă", "", "Ex: Dulciuri", (n) => { if(n && !catalogCategorii[n]){ updateCatalog({...catalogCategorii, [n]: {termen: 30, unit: 'zile', produse: []}}); } })}/></div>
                     <div className="mt-3">
-                        {Object.entries(catalogCategorii).map(([catName, catData]) => {
+                        {sortedCategories.map(([catName, catData]) => {
                             const isDrojdii = catName === 'Drojdii';
                             return (
                                 <Card key={catName} className="!m-[0_0_15px_0] border border-border-color dark:border-dark-border !shadow-none !p-3">
@@ -501,9 +612,10 @@
                                         <div className="flex gap-2 items-center bg-gray-100 dark:bg-gray-800 p-1.5 rounded-xl">
                                             {!isDrojdii ? (
                                                 <React.Fragment>
-                                                    <input type="number" min="0" value={catData.termen} onChange={e => { let c={...catalogCategorii}; let val=parseInt(e.target.value); if(isNaN(val)||val<0)val=0; c[catName].termen=val; updateCatalog(c); }} className="w-[50px] bg-transparent text-center font-bold outline-none" />
-                                                    <select value={catData.unit} onChange={e => { let c={...catalogCategorii}; c[catName].unit=e.target.value; updateCatalog(c); }} className="bg-transparent font-bold outline-none cursor-pointer pr-1">
-                                                        <option value="zile">Zile</option><option value="luni">Luni</option>
+                                                    <input type="number" min="0" value={catData.termen} onChange={e => { let c={...catalogCategorii}; let val=parseInt(e.target.value); if(isNaN(val)||val<0)val=0; c[catName].termen=val; updateCatalog(c); }} className="w-[50px] bg-transparent text-center font-bold outline-none font-medium text-text-main dark:text-white" />
+                                                    <select value={catData.unit} onChange={e => { let c={...catalogCategorii}; c[catName].unit=e.target.value; updateCatalog(c); }} className="bg-transparent font-bold outline-none cursor-pointer pr-1 text-text-main dark:text-white">
+                                                        <option value="zile" className="dark:bg-[#1a1a1c]">Zile</option>
+                                                        <option value="luni" className="dark:bg-[#1a1a1c]">Luni</option>
                                                     </select>
                                                 </React.Fragment>
                                             ) : <span className="text-[0.8rem] text-danger font-bold px-2">Exp. Manuală</span>}
@@ -511,11 +623,23 @@
                                     </div>
                                     <div className="border-t border-dashed border-border-color dark:border-dark-border pt-2">
                                         {catData.produse.map((p, idx) => (
-                                            <CardRow key={idx} className="!p-[8px_5px] !text-[0.95rem]">
+                                            <CardRow key={idx} className="!p-[8px_5px] !text-[0.95rem] hover:bg-gray-50 dark:hover:bg-gray-900/40 rounded-lg pr-1">
                                                 <span className="font-medium">{p}</span>
-                                                <div className="flex gap-1">
-                                                    <ButtonIcon icon="fas fa-pen" className="!text-accent !text-[1rem] !p-1" onClick={() => promptAction("Redenumește", p, "Nume", (newName) => { if(newName && newName !== p){ let c={...catalogCategorii}; c[catName].produse[idx]=newName; updateCatalog(c); db.collection("produse_magazin").where("categorie","==",catName).where("nume","==",p).get().then(s=>{let b=db.batch(); s.forEach(d=>b.update(d.ref,{nume:newName})); b.commit();}); } })} />
-                                                    <ButtonDanger icon="fas fa-trash" className="!text-[1rem] !p-1" onClick={() => confirmAction("Șterge", `Elimini ${p}?`, () => { let c={...catalogCategorii}; c[catName].produse.splice(idx,1); updateCatalog(c); })} />
+                                                <div className="flex items-center gap-1">
+                                                    {/* Săgeată Sus */}
+                                                    <ButtonIcon 
+                                                        icon="fas fa-chevron-up" 
+                                                        className={`!text-[0.85rem] !p-1 ${idx === 0 ? 'opacity-30 pointer-events-none' : '!text-accent'}`} 
+                                                        onClick={() => moveProduct(catName, idx, 'up')} 
+                                                    />
+                                                    {/* Săgeată Jos */}
+                                                    <ButtonIcon 
+                                                        icon="fas fa-chevron-down" 
+                                                        className={`!text-[0.85rem] !p-1 ${idx === catData.produse.length - 1 ? 'opacity-30 pointer-events-none' : '!text-accent'}`} 
+                                                        onClick={() => moveProduct(catName, idx, 'down')} 
+                                                    />
+                                                    <ButtonIcon icon="fas fa-pen" className="!text-accent !text-[0.9rem] !p-1" onClick={() => promptAction("Redenumește", p, "Nume", (newName) => { if(newName && newName !== p){ let c={...catalogCategorii}; c[catName].produse[idx]=newName; updateCatalog(c); db.collection("produse_magazin").where("categorie","==",catName).where("nume","==",p).get().then(s=>{let b=db.batch(); s.forEach(d=>b.update(d.ref,{nume:newName})); b.commit();}); } })} />
+                                                    <ButtonDanger icon="fas fa-trash" className="!text-[0.9rem] !p-1" onClick={() => confirmAction("Șterge", `Elimini ${p}?`, () => { let c={...catalogCategorii}; c[catName].produse.splice(idx,1); updateCatalog(c); })} />
                                                 </div>
                                             </CardRow>
                                         ))}
@@ -584,10 +708,10 @@
                     </button>
                 </div>
 
-                <div className={`p-4 pt-2 ${columns === 2 ? 'grid grid-cols-2 gap-3' : 'flex flex-col gap-3'}`} ref={containerRef}>
+                <div className={`p-4 pt-2 ${columns === 2 ? 'grid grid-cols-2 gap-3 mx-0 px-4' : 'flex flex-col gap-3'}`} ref={containerRef}>
                     {magSect.length === 0 ? <div className="col-span-2 p-5 text-center text-text-sec font-medium">Nu există magazine.</div> : null}
                     {magSect.map(m => (
-                        <Card key={m.id} onClick={()=>setView({page: PAGES.STORE, data: {magazin: m, sector: sector}})} className={`!m-0 cursor-pointer border-l-[8px] ${columns === 2 ? '!p-3' : '!pl-4'}`} style={{borderLeftColor: m.culoare || CONFIG.COLORS.DEFAULT_STORE}}>
+                        <Card key={m.id} onClick={()=>setView({page: PAGES.STORE, data: {magazin: m, sector: sector}})} className={`!mx-0 !my-0 cursor-pointer border-l-[8px] ${columns === 2 ? '!p-3' : '!pl-4'}`} style={{borderLeftColor: m.culoare || CONFIG.COLORS.DEFAULT_STORE}}>
                             <div className={columns === 2 ? 'pr-[25px]' : 'pr-[40px]'}>
                                 <div className={`font-black leading-tight mb-1 ${columns === 2 ? 'text-[1.05rem]' : 'text-[1.2rem]'}`}>{m.nume}</div>
                                 <div className={`text-text-sec font-medium leading-tight ${columns === 2 ? 'text-[0.85rem]' : 'text-[0.95rem]'}`}>{m.adresa}</div>
@@ -646,7 +770,24 @@
         
         const prodInMag = Object.values(dbProduse).filter(p => p.magazinId === magazin.id);
         const prodGrupate = {}; Object.keys(catalogCategorii).forEach(c => prodGrupate[c]=[]);
-        prodInMag.forEach(p => { if(prodGrupate[p.categorie]) prodGrupate[p.categorie].push(p); });
+        
+        prodInMag.forEach(p => { 
+            if(prodGrupate[p.categorie]) prodGrupate[p.categorie].push(p); 
+        });
+
+        // Sortează produsele în magazin exact în ordinea specificată de user în catalogul din Setări
+        Object.keys(prodGrupate).forEach(cat => {
+            const catInfo = catalogCategorii[cat];
+            if (catInfo && catInfo.produse) {
+                prodGrupate[cat].sort((a, b) => {
+                    let indexA = catInfo.produse.indexOf(a.nume);
+                    let indexB = catInfo.produse.indexOf(b.nume);
+                    if (indexA === -1) indexA = 999;
+                    if (indexB === -1) indexB = 999;
+                    return indexA - indexB;
+                });
+            }
+        });
 
         const [openCats, setOpenCats] = useState({});
         const toggleCat = (c) => setOpenCats(prev => ({...prev, [c]: !prev[c]}));
@@ -685,7 +826,14 @@
                 </Card>
 
                 <div>
-                    {Object.entries(prodGrupate).map(([cat, produse]) => {
+                    {/* Sortează și afișează categoriile conform ordinii dorite */}
+                    {Object.entries(prodGrupate).sort(([catA], [catB]) => {
+                        let indA = PREFERRED_CAT_ORDER.indexOf(catA);
+                        let indB = PREFERRED_CAT_ORDER.indexOf(catB);
+                        if (indA === -1) indA = 999;
+                        if (indB === -1) indB = 999;
+                        return indA - indB;
+                    }).map(([cat, produse]) => {
                         const isDeschis = openCats[cat] !== undefined ? openCats[cat] : produse.length > 0;
                         return (
                             <Card key={cat} className="!p-0 overflow-hidden">
@@ -866,6 +1014,7 @@
 
         const totalVitrina = loturiCurente.reduce((sum, l) => sum + (parseInt(l.cantitate)||0), 0);
         
+        // Stoc Manual & Depozit (Inițializare smart pt 0 gol)
         const [stocMan, setStocMan] = useState(prod.stocManual === 0 ? '' : (prod.stocManual || ''));
         useEffect(() => { setStocMan(prod.stocManual === 0 ? '' : (prod.stocManual || '')); }, [prod.stocManual]);
 
@@ -1025,7 +1174,7 @@
                 {view.page === PAGES.STORE && <StorePage />}
                 {view.page === PAGES.PRODUCT && <ProductPage />}
 
-                {/* GLOBAL MODALS */}
+                {/* GLOBAL MODALS (Prompt, Confirm, Editare globală rețea) */}
                 <BaseModal isOpen={modal.type === MODAL_TYPES.EDIT_RET} title="Editează Rețea">
                     <Input placeholder="Nume" value={editRetState.nume} onChange={e=>setEditRetState({...editRetState, nume:e.target.value})} />
                     <Input type="color" value={editRetState.culoare} onChange={e=>setEditRetState({...editRetState, culoare:e.target.value})} className="!h-[50px] !p-[3px] cursor-pointer" />
