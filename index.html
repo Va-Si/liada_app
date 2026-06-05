@@ -2,1216 +2,1027 @@
 <html lang="ro">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LIADA - Mercantizare</title>
-
-    <link rel="manifest" href="manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LIADA - Mercantizare (Arhitectură Pro)</title>
     
+    <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script src="https://www.gstatic.com/firebasejs/10.1.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.1.0/firebase-firestore-compat.js"></script>
-
-    <style>
-        /* ================= TEMA ȘI CULORILE ================= */
-        :root {
-            --bg-color: #f2f2f7;
-            --surface-color: #ffffff;
-            --text-main: #1c1c1e;
-            --text-sec: #8e8e93;
-            --accent: #2563eb;
-            --danger: #ef4444;
-            --border: #c6c6c8;
-            --liada-red: rgba(255, 59, 48, 0.85);
-            --glass-bg: rgba(255, 255, 255, 0.8);
-        }
-
-        body[data-theme="dark"] {
-            --bg-color: #000000;
-            --surface-color: #1c1c1e;
-            --text-main: #ffffff;
-            --text-sec: #ebebf5;
-            --border: #38383a;
-            --glass-bg: rgba(28, 28, 30, 0.8);
-        }
-
-        body {
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            transition: background-color 0.3s, color 0.3s;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        #app-container {
-            max-width: 600px;
-            margin: 0 auto;
-            min-height: 100vh;
-            background-color: var(--bg-color);
-            position: relative;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
-        }
-
-        /* ================= NAVIGARE PAGINI ================= */
-        .page { display: none; padding-bottom: 100px; animation: fadeIn 0.2s ease-in-out; }
-        .page.active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* ================= INSULA ÎNGHEȚATĂ (HEADERS) ================= */
-       .frozen-header {
-                    position: sticky; top: 10px; margin: 10px; padding: 15px 20px; border-radius: 25px;
-                    /* Eliminăm blur-ul până când pagina este gata */
-                    background-color: var(--liada-red); 
-                    display: flex; flex-direction: column; gap: 10px; z-index: 100; box-shadow: 0 4px 15px rgba(0,0,0,0.1); color: white;
-                }
-                /* Re-aplicăm blur-ul doar după ce aplicația e încărcată */
-                .page.active .frozen-header {
-                    backdrop-filter: blur(15px);
-                    -webkit-backdrop-filter: blur(15px);
-                }
-        .header-top { display: flex; justify-content: space-between; align-items: center; }
-        .header-nav { display: flex; gap: 15px; justify-content: center; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 10px; }
-        .header-title { margin: 0; font-size: 1.6rem; font-weight: 800; }
-        .header-subtitle { margin: 0; font-size: 0.9rem; opacity: 0.9; }
-        .icon-btn { background: none; border: none; color: white; font-size: 1.3rem; cursor: pointer; padding: 5px; }
-
-        /* ================= CHENARE ȘI LISTE ================= */
-        .card { background-color: var(--surface-color); margin: 15px; padding: 15px; border-radius: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); position: relative; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 1.1rem; cursor: pointer; }
-        .card-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
-        .card-row:last-child { border-bottom: none; }
-
-        .btn-action { background: none; border: none; color: var(--accent); font-size: 1.2rem; cursor: pointer; padding: 5px 10px; }
-        .btn-danger { color: var(--danger); cursor: pointer; background: none; border: none; font-size: 1.1rem; }
-
-        .input-field { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid var(--border); border-radius: 8px; background-color: var(--bg-color); color: var(--text-main); box-sizing: border-box; }
-
-        /* ================= BUTON FAB (+) ================= */
-        .fab { position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; border-radius: 30px; background-color: var(--glass-bg); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: var(--accent); border: 1px solid var(--border); font-size: 1.8rem; box-shadow: 0 4px 15px rgba(0,0,0,0.15); cursor: pointer; z-index: 99; display: flex; justify-content: center; align-items: center; }
-
-        /* ================= MODALE ȘI BUTOANE NOI ================= */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
-        .modal-overlay.active { display: flex; }
-        .modal-content { background-color: var(--surface-color); padding: 24px; border-radius: 24px; width: 85%; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); animation: scaleIn 0.2s; }
-        @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-
-        .modal-actions { display: flex; gap: 8px; padding-top: 15px; margin-top: 10px; }
-        
-        .btn-custom-cancel {
-            flex: 1; padding: 16px; font-weight: 900; color: #94a3b8; text-transform: uppercase; font-size: 0.75rem;
-            background: transparent; border-radius: 1rem; border: none; cursor: pointer; transition: 0.2s;
-        }
-        .btn-custom-cancel:hover { background-color: #f1f5f9; }
-        body[data-theme="dark"] .btn-custom-cancel:hover { background-color: #1e293b; }
-
-        .btn-custom-save {
-            flex: 2; padding: 16px; font-weight: 900; color: white; text-transform: uppercase; font-size: 0.75rem;
-            background-color: var(--accent); border-radius: 1rem; border: none; cursor: pointer; transition: 0.2s;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        }
-        .btn-custom-save:hover { background-color: #1d4ed8; }
-
-        .btn-custom-danger {
-            flex: 2; padding: 16px; font-weight: 900; color: white; text-transform: uppercase; font-size: 0.75rem;
-            background-color: var(--danger); border-radius: 1rem; border: none; cursor: pointer; transition: 0.2s;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        }
-        .btn-custom-danger:hover { background-color: #dc2626; }
-
-        /* ================= SPECIFICE PAGINA PRODUS ================= */
-        .qty-box { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-        .qty-item { background-color: var(--bg-color); padding: 10px; border-radius: 10px; text-align: center; border: 1px solid var(--border); }
-        .qty-item span { display: block; font-size: 0.8rem; color: var(--text-sec); margin-bottom: 5px; }
-        .qty-item input { width: 60%; text-align: center; border: none; background: none; font-weight: bold; font-size: 1.2rem; color: var(--text-main);}
-        .btn-telegram { color: white; background-color: #0088cc; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer; }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.05); opacity: 0.8; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-    </style>
-</head>
-<body data-theme="system">
-
-<div id="app-container">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     
-    <div id="app-loader" style="position: fixed; top:0; left:0; width:100%; height:100%; background-color: var(--bg-color); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.3s ease;">
-        <img src="https://cdn-icons-png.flaticon.com/512/1356/1356559.png" alt="Liada Logo" style="width: 120px; height: 120px; animation: pulse 1.5s infinite; margin-bottom: 20px;">
-        <h1 style="font-weight: 900; color: var(--liada-red); font-size: 2.2rem; margin: 0; letter-spacing: 2px;">LIADA</h1>
-    </div>
-
-    <div id="page-main" class="page active">
-        <div class="frozen-header" style="background-color: var(--liada-red);">
-            <div class="header-top">
-                <h1 class="header-title">LIADA</h1>
-                <button class="icon-btn" onclick="goTo('page-settings')"><i class="fas fa-cog"></i></button>
-            </div>
-        </div>
-
-        <div id="sectors-list">
-            <div style="padding: 20px; text-align: center; color: var(--text-sec);">Se încarcă sectoarele din Firebase...</div>
-        </div>
-
-        <div class="card">
-            <div class="card-header" style="color: var(--danger); flex-wrap: wrap;">
-                <span style="margin-bottom:5px;"><i class="fas fa-exclamation-circle"></i> Expiră în curând</span>
-                <div style="display:flex; gap:5px; align-items:center;">
-                    <input type="number" min="1" id="val-exp-global" class="input-field" style="width:60px; margin:0; padding:2px 5px; font-size:0.9rem; text-align:center;" onchange="schimbaTimpExp('global')">
-                    <select id="unit-exp-global" class="input-field" style="width:auto; margin:0; padding:2px 5px; font-size:0.9rem;" onchange="schimbaTimpExp('global')">
-                        <option value="zile">Zile</option>
-                        <option value="saptamani">Săpt.</option>
-                        <option value="luni">Luni</option>
-                    </select>
-                </div>
-            </div>
-            <div id="expirari-globale-list"></div>
-        </div>
-
-        <button class="fab" onclick="showModal('modal-sector')"><i class="fas fa-plus"></i></button>
-    </div>
-
-    <div id="page-settings" class="page">
-        <div class="frozen-header" style="background-color: var(--glass-bg); color: var(--text-main); border: 1px solid var(--border);">
-            <div class="header-top">
-                <h2 class="header-title">Aspect Aplicație</h2>
-                <button class="icon-btn" style="color: var(--text-main);" onclick="goTo('page-main')"><i class="fas fa-times"></i></button>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-row">
-                <span>Tema Aplicației</span>
-                <select class="input-field" style="width: auto;" onchange="setTheme(this.value)">
-                    <option value="system">Tema Sistem</option>
-                    <option value="light">Tema Albă</option>
-                    <option value="dark">Tema Neagră</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">Rețea de magazine <button class="btn-action" onclick="showModal('modal-network')"><i class="fas fa-plus"></i></button></div>
-            <div id="lista-retele"></div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">Detalii despre magazine <button class="btn-action" onclick="showModal('modal-property')"><i class="fas fa-plus"></i></button></div>
-            <div id="lista-proprietati"></div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">Produse și Termen de Valabilitate <button class="btn-action" onclick="adaugaCategorieNoua()"><i class="fas fa-plus"></i></button></div>
-            <div id="lista-categorii-setari" style="margin-top: 10px;">
-                </div>
-        </div>
-    </div>
-
-    <div id="page-sector" class="page">
-        <div class="frozen-header" id="sector-header-color" style="background-color: #2E7D32;">
-            <div class="header-top">
-                <h2 class="header-title" id="sector-title-display">Nume Sector</h2>
-                <button class="icon-btn"><i class="fas fa-pen"></i></button>
-            </div>
-            <div class="header-nav">
-                <button class="icon-btn" onclick="goTo('page-main')"><i class="fas fa-home"></i></button>
-                <button class="icon-btn"><i class="fas fa-map-marker-alt"></i></button>
-                <button class="icon-btn"><i class="fas fa-building"></i></button>
-            </div>
-        </div>
-
-        <div id="stores-list"></div>
-
-        <div class="card">
-            <div class="card-header" style="color: var(--danger); flex-wrap: wrap;">
-                <span style="margin-bottom:5px;"><i class="fas fa-exclamation-circle"></i> Expiră în curând</span>
-                <div style="display:flex; gap:5px; align-items:center;">
-                    <input type="number" min="1" id="val-exp-sector" class="input-field" style="width:60px; margin:0; padding:2px 5px; font-size:0.9rem; text-align:center;" onchange="schimbaTimpExp('sector')">
-                    <select id="unit-exp-sector" class="input-field" style="width:auto; margin:0; padding:2px 5px; font-size:0.9rem;" onchange="schimbaTimpExp('sector')">
-                        <option value="zile">Zile</option>
-                        <option value="saptamani">Săpt.</option>
-                        <option value="luni">Luni</option>
-                    </select>
-                </div>
-            </div>
-            <div id="expirari-sector-list"></div>
-        </div>
-
-        <button class="fab" onclick="showModal('modal-store')"><i class="fas fa-plus"></i></button>
-    </div>
-
-    <div id="page-store" class="page">
-        <div class="frozen-header" id="store-header-color" style="background-color: #4CAF50;">
-            <div class="header-top">
-                <div>
-                    <h2 class="header-title" id="store-title-display">Nume Magazin</h2>
-                    <p class="header-subtitle" id="store-address-display">Adresa Magazin</p>
-                </div>
-                <button class="icon-btn"><i class="fas fa-pen"></i></button>
-            </div>
-            <div class="header-nav">
-                <button class="icon-btn" onclick="goTo('page-main')"><i class="fas fa-home"></i></button>
-                <button class="icon-btn" onclick="goTo('page-sector')"><i class="fas fa-arrow-left"></i></button>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">Detalii despre magazin</div>
-            <div id="store-properties-list"></div>
-        </div>
-
-        <div id="categories-list"></div>
-
-        <div class="card">
-            <div class="card-header" style="color: var(--danger); flex-wrap: wrap;">
-                <span style="margin-bottom:5px;"><i class="fas fa-exclamation-circle"></i> Expiră în curând</span>
-                <div style="display:flex; gap:5px; align-items:center;">
-                    <input type="number" min="1" id="val-exp-store" class="input-field" style="width:60px; margin:0; padding:2px 5px; font-size:0.9rem; text-align:center;" onchange="schimbaTimpExp('store')">
-                    <select id="unit-exp-store" class="input-field" style="width:auto; margin:0; padding:2px 5px; font-size:0.9rem;" onchange="schimbaTimpExp('store')">
-                        <option value="zile">Zile</option>
-                        <option value="saptamani">Săpt.</option>
-                        <option value="luni">Luni</option>
-                    </select>
-                </div>
-            </div>
-            <div id="expirari-store-list"></div>
-        </div>
-    </div>
-
-    <div id="page-product" class="page">
-        <div class="frozen-header" id="product-header-color" style="background-color: #4CAF50;">
-            <div class="header-top">
-                <div>
-                    <h2 class="header-title" id="product-title-display">Nume Produs</h2>
-                    <p class="header-subtitle" id="product-store-display">Magazin - Adresă</p>
-                </div>
-            </div>
-            <div class="header-nav">
-                <button class="icon-btn" onclick="goTo('page-main')"><i class="fas fa-home"></i></button>
-                <button class="icon-btn" onclick="goTo('page-store')"><i class="fas fa-arrow-left"></i></button>
-            </div>
-        </div>
-
-        <div class="card">
-            <textarea id="notite-input" class="input-field" placeholder="Notițe de făcut..." rows="2"></textarea>
-        </div>
-
-        <div class="card">
-            <div class="card-header">Cantitatea</div>
-            <div class="card-row"><span>Depozit:</span> <input type="number" id="depozit-input" class="input-field" style="width: 50%; margin:0;"></div>
-            
-            <div class="qty-box">
-                <div class="qty-item">
-                    <span>Vitrină (Sumă loturi)</span>
-                    <div style="font-size: 1.4rem; font-weight: bold; color: var(--accent);" id="vitrina-total">0</div>
-                </div>
-                <div class="qty-item">
-                    <span>Stoc (Manual)</span>
-                    <div style="display:flex; align-items:center; justify-content:center; gap:5px;">
-                        <input type="number" id="stoc-manual" placeholder="0">
-                        <button class="btn-telegram" onclick="trimiteInSheets()"><i class="fas fa-paper-plane"></i></button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                Termen de valabilitate
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span style="font-size: 0.7rem; color: var(--text-sec); font-weight:normal;" id="data-actualizare">Actualizat -</span>
-                    <button class="btn-action" onclick="deschideModalLot()"><i class="fas fa-plus"></i></button>
-                </div>
-            </div>
-            <div id="batches-list"></div>
-        </div>
-    </div>
-
-    <div id="modal-confirm" class="modal-overlay" style="z-index: 2000;">
-        <div class="modal-content" style="text-align: center;">
-            <h3 id="confirm-title" style="margin-top:0;">Confirmare</h3>
-            <p id="confirm-message" style="color: var(--text-sec); font-size: 0.9rem; margin-bottom: 10px;">Ești sigur?</p>
-            <div class="modal-actions">
-                <button type="button" class="btn-custom-cancel" onclick="inchideConfirmare()">Anulează</button>
-                <button type="button" class="btn-custom-danger" id="btn-executa-confirmare">Șterge</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="modal-prompt" class="modal-overlay" style="z-index: 2000;">
-        <div class="modal-content">
-            <h3 id="prompt-title" style="margin-top:0;">Introducere Date</h3>
-            <input type="text" id="prompt-input" class="input-field" placeholder="...">
-            <div class="modal-actions">
-                <button type="button" class="btn-custom-cancel" onclick="inchidePrompt()">Anulează</button>
-                <button type="button" class="btn-custom-save" id="btn-executa-prompt">Salvează</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="modal-sector" class="modal-overlay">
-        <div class="modal-content">
-            <h3 style="margin-top:0;">Adaugă Sector</h3>
-            <input type="text" class="input-field" id="new-sector-name" placeholder="Denumire Sector">
-            <input type="color" class="input-field" id="new-sector-color" value="#007aff" style="height: 40px; padding: 2px;">
-            <div class="modal-actions">
-                <button type="button" class="btn-custom-cancel" onclick="closeModal('modal-sector')">Anulează</button>
-                <button type="button" class="btn-custom-save" onclick="salveazaSector()">Salvează</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="modal-store" class="modal-overlay">
-        <div class="modal-content">
-            <h3 style="margin-top:0;">Adaugă Magazin</h3>
-            <input type="text" class="input-field" id="new-store-name" placeholder="Nume Magazin (ex: Local 1)">
-            <input type="text" class="input-field" id="new-store-address" placeholder="Adresă (ex: Bd. Dacia 44)">
-            <select class="input-field" id="new-store-network"></select>
-            <div class="modal-actions">
-                <button type="button" class="btn-custom-cancel" onclick="closeModal('modal-store')">Anulează</button>
-                <button type="button" class="btn-custom-save" onclick="salveazaMagazin()">Salvează</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="modal-network" class="modal-overlay">
-        <div class="modal-content">
-            <h3 style="margin-top:0;">Adaugă Rețea</h3>
-            <input type="text" id="new-network-name" class="input-field" placeholder="Nume rețea">
-            <input type="color" id="new-network-color" class="input-field" value="#007aff" style="height: 40px; padding: 2px;">
-            <div class="modal-actions">
-                <button type="button" class="btn-custom-cancel" onclick="closeModal('modal-network')">Anulează</button>
-                <button type="button" class="btn-custom-save" onclick="salveazaRetea()">Salvează</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="modal-property" class="modal-overlay">
-        <div class="modal-content">
-            <h3 style="margin-top:0;">Adaugă Câmp Detalii</h3>
-            <input type="text" id="new-property-name" class="input-field" placeholder="Nume câmp (ex: Telefon)">
-            <div class="modal-actions">
-                <button type="button" class="btn-custom-cancel" onclick="closeModal('modal-property')">Anulează</button>
-                <button type="button" class="btn-custom-save" onclick="salveazaProprietate()">Salvează</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="modal-add-product" class="modal-overlay">
-        <div class="modal-content">
-            <h3 id="modal-product-title" style="margin-top:0;">Adaugă Produs</h3>
-            <input type="hidden" id="new-product-category">
-
-            <div style="font-size: 0.9rem; color: var(--text-sec); margin-bottom: 5px;">Alege din catalog:</div>
-            <select class="input-field" id="new-product-select"></select>
-
-            <div class="modal-actions">
-                <button type="button" class="btn-custom-cancel" onclick="closeModal('modal-add-product')">Anulează</button>
-                <button type="button" class="btn-custom-save" onclick="salveazaProdusInMagazin()">Salvează</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="modal-batch" class="modal-overlay">
-        <div class="modal-content">
-            <h3 style="margin-top:0;">Adaugă Lot Nou</h3>
-            <input type="number" class="input-field" id="batch-qty" placeholder="Cantitate (opțional)">
-            <div style="display:flex; gap:10px; align-items:center;">
-                <input type="text" class="input-field" id="batch-date" placeholder="Data (ZZ.LL.AAAA)">
-                <input type="date" class="input-field" id="batch-date-picker" style="width: 40px; padding:5px;" onchange="formateazaData(this.value)">
-            </div>
-            <div id="batch-date-label" style="font-size: 0.8rem; color: var(--text-sec); margin-top: 5px; text-align: center;">Data Prod. (ZZ.LL.AAAA)</div>
-            
-            <div class="modal-actions">
-                <button type="button" class="btn-custom-cancel" onclick="closeModal('modal-batch')">Anulează</button>
-                <button type="button" class="btn-custom-save" onclick="adaugaLot()">Salvează</button>
-            </div>
-        </div>
-    </div>
-
-</div>
-
-<script>
-    // --- 1. CONFIGURARE FIREBASE ---
-    const firebaseConfig = {
-        apiKey: "AIzaSyB7O1CAvbXloK379wXKwDY1SObgox7jf3U",
-        authDomain: "liada-f7c95.firebaseapp.com",
-        projectId: "liada-f7c95",
-        storageBucket: "liada-f7c95.firebasestorage.app",
-        messagingSenderId: "232514890985",
-        appId: "1:232514890985:web:b6914e6b79682a90ca9478"
-    };
-
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
-    db.enablePersistence().catch(function(err) {
-        if (err.code == 'failed-precondition') {
-            console.warn("Offline funcționează doar într-un singur tab deschis odată.");
-        }
-    });
-
-    // --- 2. STRUCTURI DE BAZĂ DINAMICE ȘI CACHE GLOBAL ---
-    let defaultCatalog = {
-        "Maioneză - pachete": { termen: 180, unit: "zile", produse: ["🟢 De Casă 185g", "🟡 Provensal 185g", "🟢 De Casă 370g", "🟡 Provensal 370g", "🟢 De Casă 600g", "🟡 Provensal 600g", "🔴 De Elită 450g", "🔴 De Elită 650g", "🟤 Profi 370g"] },
-        "Maioneze - căldări": { termen: 120, unit: "zile", produse: ["🔵 Delicios 850ml", "🟢 De Casă 850ml", "🟡 Provensal 850ml", "🟢 De Casă 1.4l", "🟡 Provensal 1.4l", "🟡 Provensal 630g"] },
-        "Ketchup": { termen: 180, unit: "zile", produse: ["⚫ Chili 275g", "🟢 Frigărui 275g"] },
-        "Paste de tomat": { termen: 180, unit: "zile", produse: ["🔵 Tomate 70g", "🔵 Tomate 275g"] },
-        "Muștar": { termen: 120, unit: "zile", produse: ["🟡 Rusesc 200g"] },
-        "Oțet": { termen: 12, unit: "luni", produse: ["🟤 Acid Acetic de Mere 5%", "🟢 Acid Acetic 6%", "🟡 Acid Acetic 9%"] },
-        "Drojdii": { termen: 0, unit: "zile", produse: ["🟡 Secretul Bunicii 50g"] }
-    };
-    let catalogCategorii = JSON.parse(localStorage.getItem('catalogCategorii')) || defaultCatalog;
-    let reteleMagazine = JSON.parse(localStorage.getItem('reteleMagazine')) || [{ nume: 'Local', culoare: '#4CAF50' }, { nume: 'Linella', culoare: '#E53935' }];
-    let proprietatiMagazine = JSON.parse(localStorage.getItem('proprietatiMagazine')) || ['Manager'];
-
-    let magazinCurent = {};
-    let sectorCurentId = null;
-    let produsCurent = { id: null, nume: '', categorie: '' };
-    
-    let dbSectoare = {};
-    let dbMagazine = {};
-    let dbProduse = {};
-    let dbLoturi = {};
-
-    let unsubscribeProduseCurente = null;
-    let unsubscribeLoturiCurente = null;
-    let actiuneConfirmare = null;
-    let actiunePrompt = null;
-
-    // --- SISTEME DE MODALE PERSONALIZATE ---
-    function cereConfirmare(titlu, mesaj, callback) {
-        document.getElementById('confirm-title').innerText = titlu;
-        document.getElementById('confirm-message').innerText = mesaj;
-        actiuneConfirmare = callback;
-        showModal('modal-confirm');
-    }
-    function inchideConfirmare() { closeModal('modal-confirm'); actiuneConfirmare = null; }
-    document.getElementById('btn-executa-confirmare').addEventListener('click', () => {
-        if (actiuneConfirmare) actiuneConfirmare();
-        inchideConfirmare();
-    });
-
-    function arataPrompt(titlu, valoareInitiala, placeholder, callback) {
-        document.getElementById('prompt-title').innerText = titlu;
-        let input = document.getElementById('prompt-input');
-        input.value = valoareInitiala;
-        input.placeholder = placeholder;
-        actiunePrompt = callback;
-        showModal('modal-prompt');
-        setTimeout(() => input.focus(), 100);
-    }
-    function inchidePrompt() { closeModal('modal-prompt'); actiunePrompt = null; }
-    document.getElementById('btn-executa-prompt').addEventListener('click', () => {
-        let val = document.getElementById('prompt-input').value.trim();
-        if(actiunePrompt && val) actiunePrompt(val);
-        inchidePrompt();
-    });
-
-    // --- LOGICA PENTRU SETARI ---
-    function renderSetariRetele() {
-        const container = document.getElementById('lista-retele');
-        const selectStore = document.getElementById('new-store-network');
-        container.innerHTML = ''; selectStore.innerHTML = '';
-
-        reteleMagazine.forEach((r, index) => {
-            container.innerHTML += `
-                <div class="card-row">${r.nume} 
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <span style="background: ${r.culoare}; width: 20px; height: 20px; border-radius: 50%;"></span>
-                        <button class="btn-danger" onclick="stergeRetea(${index})"><i class="fas fa-trash"></i></button>
-                    </div>
-                </div>`;
-            selectStore.innerHTML += `<option value="${r.nume}" data-color="${r.culoare}">${r.nume}</option>`;
-        });
-    }
-
-    function salveazaRetea() {
-        let n = document.getElementById('new-network-name').value;
-        let c = document.getElementById('new-network-color').value;
-        if(n) {
-            reteleMagazine.push({nume: n, culoare: c});
-            localStorage.setItem('reteleMagazine', JSON.stringify(reteleMagazine));
-            renderSetariRetele();
-            closeModal('modal-network');
-            document.getElementById('new-network-name').value = '';
-        }
-    }
-
-    function stergeRetea(index) {
-        cereConfirmare("Ștergere Rețea", "Ești sigur că vrei să ștergi această rețea de magazine?", () => {
-            reteleMagazine.splice(index, 1);
-            localStorage.setItem('reteleMagazine', JSON.stringify(reteleMagazine));
-            renderSetariRetele();
-        });
-    }
-
-    function renderSetariProprietati() {
-        const container = document.getElementById('lista-proprietati');
-        container.innerHTML = '';
-        proprietatiMagazine.forEach((p, index) => {
-            container.innerHTML += `
-                <div class="card-row">Property: ${p} 
-                    <button class="btn-danger" onclick="stergeProprietate(${index})"><i class="fas fa-trash"></i></button>
-                </div>`;
-        });
-    }
-
-    function salveazaProprietate() {
-        let n = document.getElementById('new-property-name').value;
-        if(n) {
-            proprietatiMagazine.push(n);
-            localStorage.setItem('proprietatiMagazine', JSON.stringify(proprietatiMagazine));
-            renderSetariProprietati();
-            closeModal('modal-property');
-            document.getElementById('new-property-name').value = '';
-        }
-    }
-
-    function stergeProprietate(index) {
-        cereConfirmare("Ștergere Câmp", "Ești sigur că vrei să ștergi acest câmp personalizat?", () => {
-            proprietatiMagazine.splice(index, 1);
-            localStorage.setItem('proprietatiMagazine', JSON.stringify(proprietatiMagazine));
-            renderSetariProprietati();
-        });
-    }
-
-    function deseneazaProprietatiInMagazin() {
-        const container = document.getElementById('store-properties-list');
-        container.innerHTML = '';
-        proprietatiMagazine.forEach(p => {
-            container.innerHTML += `
-            <div class="card-row">
-                <span>${p}:</span>
-                <input type="text" class="input-field" placeholder="${p}..." style="width: 60%; margin-top:0;">
-            </div>`;
-        });
-    }
-
-    function renderSetariCategorii() {
-        const container = document.getElementById('lista-categorii-setari');
-        container.innerHTML = '';
-        
-        for (let catName in catalogCategorii) {
-            let catData = catalogCategorii[catName];
-            let isDrojdii = catName === 'Drojdii';
-            
-            let produseHTML = catData.produse.map((p) => `
-                <div class="card-row" style="padding: 8px 10px; font-size: 0.9rem;">
-                    <span>${p}</span>
-                    <div style="display:flex; gap:10px;">
-                        <button class="btn-action" style="font-size: 1rem; padding:0;" onclick="redenumesteProdusCatalog('${catName}', '${p}')"><i class="fas fa-pen"></i></button>
-                        <button class="btn-danger" style="font-size: 1rem; padding:0;" onclick="stergeProdusCatalog('${catName}', '${p}')"><i class="fas fa-trash"></i></button>
-                    </div>
-                </div>
-            `).join('');
-
-            container.innerHTML += `
-                <div class="card" style="margin: 0 0 15px 0; border: 1px solid var(--border); box-shadow: none;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; flex-wrap: wrap; gap:10px;">
-                        <div style="font-weight:bold; display:flex; align-items:center; gap:8px;">
-                            <button class="btn-action" style="padding:0;" onclick="redenumesteCategorie('${catName}')"><i class="fas fa-pen"></i></button>
-                            <span>${catName}</span>
-                        </div>
-                        <div style="display:flex; gap:5px; align-items:center;">
-                            ${!isDrojdii ? `
-                                <input type="number" class="input-field" style="width:60px; margin:0; padding:5px; text-align:center;" value="${catData.termen}" onchange="schimbaTermenValabilitate('${catName}', this.value)">
-                                <select class="input-field" style="width:auto; margin:0; padding:5px;" onchange="schimbaUnitValabilitate('${catName}', this.value)">
-                                    <option value="zile" ${catData.unit === 'zile' ? 'selected' : ''}>Zile</option>
-                                    <option value="luni" ${catData.unit === 'luni' ? 'selected' : ''}>Luni</option>
-                                </select>
-                            ` : `<span style="font-size:0.8rem; color:var(--danger); font-weight:bold;">Introducere Manuală Exp.</span>`}
-                        </div>
-                    </div>
-                    <div style="border-top: 1px dashed var(--border); padding-top: 5px;">
-                        ${produseHTML}
-                        <button class="btn-action" style="font-size: 0.9rem; margin-top: 5px; width:100%; text-align:left;" onclick="adaugaProdusCatalog('${catName}')"><i class="fas fa-plus"></i> Adaugă produs nou</button>
-                    </div>
-                </div>
-            `;
-        }
-    }
-
-    function schimbaTermenValabilitate(catName, newVal) {
-        catalogCategorii[catName].termen = parseInt(newVal) || 0;
-        localStorage.setItem('catalogCategorii', JSON.stringify(catalogCategorii));
-    }
-
-    function schimbaUnitValabilitate(catName, newUnit) {
-        catalogCategorii[catName].unit = newUnit;
-        localStorage.setItem('catalogCategorii', JSON.stringify(catalogCategorii));
-    }
-
-    function adaugaCategorieNoua() {
-        arataPrompt("Categorie Nouă", "", "Ex: Dulciuri", (newName) => {
-            if(!catalogCategorii[newName]) {
-                catalogCategorii[newName] = { termen: 30, unit: 'zile', produse: [] };
-                localStorage.setItem('catalogCategorii', JSON.stringify(catalogCategorii));
-                renderSetariCategorii();
-            }
-        });
-    }
-
-    function redenumesteCategorie(oldName) {
-        arataPrompt("Redenumește Categoria", oldName, "Nume categorie", (newName) => {
-            if (newName && newName !== oldName && !catalogCategorii[newName]) {
-                catalogCategorii[newName] = catalogCategorii[oldName];
-                delete catalogCategorii[oldName];
-                localStorage.setItem('catalogCategorii', JSON.stringify(catalogCategorii));
-                renderSetariCategorii();
-                
-                db.collection("produse_magazin").where("categorie", "==", oldName).get().then(snap => {
-                    let batch = db.batch();
-                    snap.forEach(doc => batch.update(doc.ref, { categorie: newName }));
-                    batch.commit();
-                });
-            }
-        });
-    }
-
-    function adaugaProdusCatalog(categorie) {
-        arataPrompt(`Adaugă produs în ${categorie}`, "", "Denumire produs", (newName) => {
-            catalogCategorii[categorie].produse.push(newName);
-            localStorage.setItem('catalogCategorii', JSON.stringify(catalogCategorii));
-            renderSetariCategorii();
-        });
-    }
-
-    function redenumesteProdusCatalog(categorie, oldProdName) {
-        arataPrompt("Redenumește Produsul", oldProdName, "Nume produs", (newName) => {
-            if (newName && newName !== oldProdName) {
-                let idx = catalogCategorii[categorie].produse.indexOf(oldProdName);
-                if(idx !== -1) {
-                    catalogCategorii[categorie].produse[idx] = newName;
-                    localStorage.setItem('catalogCategorii', JSON.stringify(catalogCategorii));
-                    renderSetariCategorii();
-
-                    db.collection("produse_magazin").where("categorie", "==", categorie).where("nume", "==", oldProdName).get().then(snap => {
-                        let batch = db.batch();
-                        snap.forEach(doc => batch.update(doc.ref, { nume: newName }));
-                        batch.commit();
-                    });
-                }
-            }
-        });
-    }
-
-    function stergeProdusCatalog(categorie, prodName) {
-        cereConfirmare("Șterge Produs Catalog", `Ești sigur că elimini "${prodName}" din opțiunile categoriei?`, () => {
-            let idx = catalogCategorii[categorie].produse.indexOf(prodName);
-            if(idx !== -1) {
-                catalogCategorii[categorie].produse.splice(idx, 1);
-                localStorage.setItem('catalogCategorii', JSON.stringify(catalogCategorii));
-                renderSetariCategorii();
-            }
-        });
-    }
-
-    function setTheme(theme) {
-        if (theme === 'system') {
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            document.body.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
-        } else {
-            document.body.setAttribute('data-theme', theme);
-        }
-    }
-
-    function goTo(pageId) {
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.getElementById(pageId).classList.add('active');
-        window.scrollTo(0, 0);
-    }
-
-    function showModal(id) { document.getElementById(id).classList.add('active'); }
-    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
-
-    function schimbaTimpExp(tip) {
-        let elVal = document.getElementById(`val-exp-${tip}`);
-        let val = parseInt(elVal.value);
-        if (isNaN(val) || val < 1) { val = 1; elVal.value = 1; }
-        
-        let unit = document.getElementById(`unit-exp-${tip}`).value;
-        localStorage.setItem(`expTimeVal_${tip}`, val);
-        localStorage.setItem(`expTimeUnit_${tip}`, unit);
-        renderToateExpirarile();
-    }
-
-    function incarcaSetariTimp() {
-        let vG = localStorage.getItem('expTimeVal_global');
-        let vSec = localStorage.getItem('expTimeVal_sector');
-        let vSto = localStorage.getItem('expTimeVal_store');
-        
-        let conf = {
-            global: { val: vG !== null ? parseInt(vG) : 2, unit: localStorage.getItem('expTimeUnit_global') || 'luni' },
-            sector: { val: vSec !== null ? parseInt(vSec) : 1, unit: localStorage.getItem('expTimeUnit_sector') || 'luni' },
-            store:  { val: vSto !== null ? parseInt(vSto) : 2, unit: localStorage.getItem('expTimeUnit_store') || 'saptamani' }
-        };
-        
-        ['global', 'sector', 'store'].forEach(tip => {
-            let elVal = document.getElementById(`val-exp-${tip}`);
-            let elUnit = document.getElementById(`unit-exp-${tip}`);
-            if(elVal) elVal.value = conf[tip].val;
-            if(elUnit) elUnit.value = conf[tip].unit;
-        });
-        
-        return conf;
-    }
-
-    function getZileMaxime(configItem) {
-        let v = configItem.val;
-        if(configItem.unit === 'saptamani') return v * 7;
-        if(configItem.unit === 'luni') return v * 30;
-        return v;
-    }
-
-    function convertDataToTime(dateStr) {
-        if(!dateStr || dateStr === "Dată invalidă" || dateStr === "Calculată") return new Date(8640000000000000).getTime();
-        let parts = dateStr.split('.');
-        if(parts.length !== 3) return new Date(8640000000000000).getTime();
-        return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
-    }
-
-    function renderToateExpirarile() {
-        let conf = incarcaSetariTimp();
-        let arrGlobal = [], arrSector = [], arrStore = [];
-        
-        let azi = new Date();
-        azi.setHours(0,0,0,0);
-        let msAzi = azi.getTime();
-
-        let maxG = getZileMaxime(conf.global);
-        let maxSec = getZileMaxime(conf.sector);
-        let maxStore = getZileMaxime(conf.store);
-
-        for(let lotId in dbLoturi) {
-            let lot = dbLoturi[lotId];
-            let expTime = convertDataToTime(lot.dataExp);
-            if(expTime > 8000000000000000) continue; 
-
-            let zileRamase = Math.round((expTime - msAzi) / (1000 * 3600 * 24));
-            
-            let prod = dbProduse[lot.produsId]; if(!prod) continue;
-            let mag = dbMagazine[prod.magazinId]; if(!mag) continue;
-            let sec = dbSectoare[mag.sectorId]; if(!sec) continue;
-
-            let item = { lot, prod, mag, sec, zile: zileRamase };
-
-            if (zileRamase <= maxG) arrGlobal.push(item);
-            if (sectorCurentId === sec.id && zileRamase <= maxSec) arrSector.push(item);
-            if (magazinCurent.id === mag.id && zileRamase <= maxStore) arrStore.push(item);
-        }
-
-        let sortFn = (a, b) => a.zile - b.zile;
-        arrGlobal.sort(sortFn); arrSector.sort(sortFn); arrStore.sort(sortFn);
-
-        function genereazaHtmlExp(item, nivel) {
-            let navSec = `deschideSector('${item.sec.id}', '${item.sec.nume}', '${item.sec.culoare}')`;
-            let navMag = `deschideMagazin('${item.mag.id}', '${item.mag.nume}', '${item.mag.adresa}', '${item.mag.culoare}')`;
-            let navProd = `deschideProdus('${item.prod.id}', '${item.prod.nume}', '${item.mag.culoare}', '${item.prod.categorie}')`;
-
-            let secLink = `<span onclick="${navSec}" style="cursor:pointer; color:var(--accent); text-decoration:underline;">${item.sec.nume}</span>`;
-            let magLink = `<span onclick="${navMag}" style="cursor:pointer; color:var(--accent); text-decoration:underline;">${item.mag.nume}</span>`;
-            let prodLink = `<span onclick="${navProd}" style="cursor:pointer; color:var(--text-main); font-weight:bold;">${item.prod.nume} (${item.lot.cantitate} buc)</span>`;
-
-            let detalii = "";
-            if(nivel === 'global') detalii = `${secLink} > ${magLink}`;
-            if(nivel === 'sector') detalii = `${magLink}`;
-
-            let textExpirare = "";
-            if (item.zile < 0) {
-                textExpirare = `A expirat de <span style="color:var(--danger); font-weight:bold;">${Math.abs(item.zile)} zile</span>`;
-            } else if (item.zile === 0) {
-                textExpirare = `Expiră <span style="color:var(--danger); font-weight:bold;">ASTĂZI</span>`;
-            } else {
-                textExpirare = `Va expira în <span style="color:var(--danger); font-weight:bold;">${item.zile} zile</span>`;
-            }
-
-            return `
-                <div style="border-bottom: 1px solid var(--border); padding: 12px 0; display: flex; justify-content: space-between; align-items: center;">
-                    <div style="flex:1;">
-                        <div style="margin-bottom: 3px;">${prodLink}</div>
-                        <div style="font-size:0.85rem; color:var(--text-main);">${textExpirare}</div>
-                        ${detalii ? `<div style="font-size:0.8rem; color:var(--text-sec); margin-top:3px;">${detalii}</div>` : ''}
-                    </div>
-                    <div style="color:var(--danger); font-size:1.2rem; font-weight:bold; margin-left:10px; text-align:right; min-width:80px;">
-                        ${item.lot.dataExp}
-                    </div>
-                </div>`;
-        }
-
-        let golStr = '<div style="padding:10px; text-align:center; color:var(--text-sec); font-size:0.9rem;">Toate produsele sunt în termen.</div>';
-        
-        let elGlobal = document.getElementById('expirari-globale-list');
-        if(elGlobal) elGlobal.innerHTML = arrGlobal.length ? arrGlobal.map(i => genereazaHtmlExp(i, 'global')).join('') : golStr;
-        
-        let elSector = document.getElementById('expirari-sector-list');
-        if(elSector) elSector.innerHTML = arrSector.length ? arrSector.map(i => genereazaHtmlExp(i, 'sector')).join('') : golStr;
-        
-        let elStore = document.getElementById('expirari-store-list');
-        if(elStore) elStore.innerHTML = arrStore.length ? arrStore.map(i => genereazaHtmlExp(i, 'store')).join('') : golStr;
-    }
-
-    function renderListaSectoare() {
-        const list = document.getElementById('sectors-list');
-        list.innerHTML = '';
-        let array = Object.values(dbSectoare).sort((a,b) => (a.timestamp?.toMillis()||0) - (b.timestamp?.toMillis()||0));
-        
-        if (array.length === 0) { list.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-sec);">Nu există sectoare.</div>'; return; }
-
-        array.forEach(s => {
-            list.innerHTML += `
-                <div class="card" style="background-color: ${s.culoare}; color: white; cursor:pointer;" onclick="deschideSector('${s.id}', '${s.nume}', '${s.culoare}')">
-                    <div class="card-header">
-                        ${s.nume}
-                        <button class="icon-btn" onclick="event.stopPropagation(); stergeSectorFirebase('${s.id}')"><i class="fas fa-trash"></i></button>
-                    </div>
-                </div>`;
-        });
-    }
-
-    function salveazaSector() {
-        const nume = document.getElementById('new-sector-name').value;
-        const culoare = document.getElementById('new-sector-color').value;
-        if(nume) {
-            db.collection("sectoare").add({ nume, culoare, timestamp: firebase.firestore.FieldValue.serverTimestamp() })
-              .then(() => { closeModal('modal-sector'); document.getElementById('new-sector-name').value = ''; });
-        }
-    }
-
-    function stergeSectorFirebase(id) {
-        cereConfirmare("Ștergere Sector", "Ești sigur? Vor fi șterse referințele către acest sector.", () => {
-            db.collection("sectoare").doc(id).delete();
-        });
-    }
-
-    function deschideSector(id, nume, culoare) {
-        sectorCurentId = id;
-        document.getElementById('sector-title-display').innerText = nume;
-        document.getElementById('sector-header-color').style.backgroundColor = culoare;
-        renderMagazineDinSector();
-        renderToateExpirarile();
-        goTo('page-sector');
-    }
-
-    function renderMagazineDinSector() {
-        const list = document.getElementById('stores-list');
-        list.innerHTML = '';
-        let array = Object.values(dbMagazine).filter(m => m.sectorId === sectorCurentId).sort((a,b) => (a.timestamp?.toMillis()||0) - (b.timestamp?.toMillis()||0));
-
-        if (array.length === 0) { list.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-sec);">Nu există magazine.</div>'; return; }
-
-        array.forEach(m => {
-            list.innerHTML += `
-                <div class="card" onclick="deschideMagazin('${m.id}', '${m.nume}', '${m.adresa}', '${m.culoare}')" style="cursor:pointer; border-left: 5px solid ${m.culoare}; position: relative;">
-                    <div style="padding-right: 35px;">
-                        <div style="font-weight:bold; font-size:1.1rem;">${m.nume}</div>
-                        <div style="color:var(--text-sec); font-size:0.9rem;">${m.adresa}</div>
-                    </div>
-                    <button class="btn-danger" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%);" onclick="event.stopPropagation(); stergeMagazinFirebase('${m.id}')">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>`;
-        });
-    }
-
-    function salveazaMagazin() {
-        const nume = document.getElementById('new-store-name').value;
-        const adresa = document.getElementById('new-store-address').value;
-        const sel = document.getElementById('new-store-network');
-        const culoare = sel.options[sel.selectedIndex]?.getAttribute('data-color') || '#4CAF50';
-        const reteaVal = sel.value || 'Local';
-        
-        if (nume && sectorCurentId) {
-            db.collection("magazine").add({
-                sectorId: sectorCurentId, nume, adresa, retea: reteaVal, culoare, timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            }).then(() => {
-                closeModal('modal-store'); document.getElementById('new-store-name').value = ''; document.getElementById('new-store-address').value = '';
-            });
-        }
-    }
-
-    function stergeMagazinFirebase(id) {
-        cereConfirmare("Ștergere Magazin", "Ești sigur că vrei să ștergi acest magazin?", () => { db.collection("magazine").doc(id).delete(); });
-    }
-
-    function deschideMagazin(id, nume, adresa, culoare) {
-        magazinCurent = { id, nume, adresa, culoare };
-        document.getElementById('store-title-display').innerText = nume;
-        document.getElementById('store-address-display').innerText = adresa;
-        document.getElementById('store-header-color').style.backgroundColor = culoare;
-        
-        deseneazaProprietatiInMagazin();
-        
-        if (unsubscribeProduseCurente) unsubscribeProduseCurente();
-        unsubscribeProduseCurente = db.collection("produse_magazin").where("magazinId", "==", id).onSnapshot(snapshot => {
-            let produseInStore = {};
-            Object.keys(catalogCategorii).forEach(cat => produseInStore[cat] = []);
-
-            snapshot.forEach(doc => {
-                let p = doc.data(); p.id = doc.id;
-                if (!produseInStore[p.categorie]) produseInStore[p.categorie] = [];
-                produseInStore[p.categorie].push(p);
-            });
-
-            const catList = document.getElementById('categories-list');
-            catList.innerHTML = '';
-            
-            for (const [categorie, listaProduse] of Object.entries(produseInStore)) {
-                let prodHTML = listaProduse.map(p => `
-                    <div class="card-row" onclick="deschideProdus('${p.id}', '${p.nume}', '${magazinCurent.culoare}', '${categorie}')" style="cursor:pointer;">
-                        <span>${p.nume}</span> 
-                        <div>
-                            <button class="btn-danger" style="margin-right: 15px;" onclick="event.stopPropagation(); stergeProdusFirebase('${p.id}')"><i class="fas fa-trash"></i></button>
-                            <i class="fas fa-chevron-right" style="color:var(--border);"></i>
-                        </div>
-                    </div>`).join('');
-
-                let isDeschis = listaProduse.length > 0;
-                let displayStyle = isDeschis ? 'block' : 'none';
-                let rotateStyle = isDeschis ? 'rotate(0deg)' : 'rotate(90deg)';
-
-                if(listaProduse.length === 0) prodHTML = `<div style="text-align:center; color:var(--text-sec); font-size:0.8rem; padding:10px;">Niciun produs adăugat.</div>`;
-
-                catList.innerHTML += `
-                    <div class="card">
-                        <div class="card-header" onclick="toggleCategorie(this)">
-                            ${categorie} 
-                            <span style="display:flex; align-items:center; gap: 10px;">
-                                <button class="btn-action" style="padding:0;" onclick="event.stopPropagation(); deschideModalAdaugaProdus('${categorie}')"><i class="fas fa-plus"></i></button> 
-                                <i class="fas fa-chevron-down chevron-icon" style="transition: transform 0.3s ease; transform: ${rotateStyle}; color: var(--border);"></i>
-                            </span>
-                        </div>
-                        <div style="display: ${displayStyle}; padding-top:10px;">${prodHTML}</div>
-                    </div>`;
-            }
-        });
-        
-        renderToateExpirarile();
-        goTo('page-store');
-    }
-
-    function toggleCategorie(element) {
-        let content = element.nextElementSibling; let icon = element.querySelector('.chevron-icon');
-        if (content.style.display === 'none') { content.style.display = 'block'; icon.style.transform = 'rotate(0deg)'; } 
-        else { content.style.display = 'none'; icon.style.transform = 'rotate(90deg)'; }
-    }
-
-    function deschideModalAdaugaProdus(categorie) {
-        document.getElementById('modal-product-title').innerText = `Adaugă în: ${categorie}`;
-        document.getElementById('new-product-category').value = categorie;
-        const select = document.getElementById('new-product-select');
-        select.innerHTML = '<option value="">-- Selectează un produs --</option>';
-        if(catalogCategorii[categorie]) {
-            catalogCategorii[categorie].produse.forEach(p => { select.innerHTML += `<option value="${p}">${p}</option>`; });
-        }
-        showModal('modal-add-product');
-    }
-
-    function salveazaProdusInMagazin() {
-        const categorie = document.getElementById('new-product-category').value;
-        const numeFinal = document.getElementById('new-product-select').value;
-        if(!numeFinal) { alert('Alege un produs din listă!'); return; }
-
-        db.collection("produse_magazin").add({
-            magazinId: magazinCurent.id, categorie: categorie, nume: numeFinal, timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => closeModal('modal-add-product'));
-    }
-
-    function stergeProdusFirebase(id) {
-        cereConfirmare("Ștergere Produs", "Ești sigur că vrei să elimini acest produs din magazin?", () => { db.collection("produse_magazin").doc(id).delete(); });
-    }
-
-    function deschideProdus(id, numeProdus, culoareHeader, categorie) {
-        produsCurent = { id: id, nume: numeProdus, categorie: categorie };
-        document.getElementById('product-title-display').innerText = numeProdus;
-        document.getElementById('product-store-display').innerText = `${magazinCurent.nume} - ${magazinCurent.adresa}`;
-        document.getElementById('product-header-color').style.backgroundColor = culoareHeader;
-        
-        document.getElementById('vitrina-total').innerText = '0'; document.getElementById('stoc-manual').value = '';
-        document.getElementById('depozit-input').value = ''; document.getElementById('notite-input').value = '';
-        document.getElementById('batches-list').innerHTML = ''; 
-        
-        if (unsubscribeLoturiCurente) unsubscribeLoturiCurente();
-        unsubscribeLoturiCurente = db.collection("loturi").where("produsId", "==", id).onSnapshot(snapshot => {
-            let loturiArray = []; let totalVitrina = 0; let isDrojdii = produsCurent.categorie === 'Drojdii';
-
-            snapshot.forEach(doc => {
-                let lot = doc.data(); lot.id = doc.id;
-                
-                if(!isDrojdii) {
-                    let expirareActualizata = calculeazaExpirare(lot.dataProd, produsCurent.categorie);
-                    if (lot.dataExp !== expirareActualizata && expirareActualizata !== "Dată invalidă") {
-                        db.collection("loturi").doc(lot.id).update({ dataExp: expirareActualizata });
-                        lot.dataExp = expirareActualizata; 
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'bg-color': '#f2f2f7', 'surface-color': '#ffffff', 'text-main': '#1c1c1e', 'text-sec': '#8e8e93',
+                        'accent': '#2563eb', 'danger': '#ef4444', 'border-color': '#c6c6c8',
+                        'dark-bg': '#000000', 'dark-surface': '#1c1c1e', 'dark-text-main': '#ffffff',
+                        'dark-text-sec': '#ebebf5', 'dark-border': '#38383a'
+                    },
+                    animation: { 'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite', 'fade-in': 'fadeIn 0.2s ease-in-out', 'scale-in': 'scaleIn 0.2s ease-out' },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                        scaleIn: { '0%': { opacity: '0', transform: 'scale(0.95)' }, '100%': { opacity: '1', transform: 'scale(1)' } }
                     }
                 }
-                loturiArray.push(lot); totalVitrina += lot.cantitate;
-            });
-
-            loturiArray.sort((a, b) => convertDataToTime(a.dataExp) - convertDataToTime(b.dataExp));
-            document.getElementById('vitrina-total').innerText = totalVitrina;
-            
-            const list = document.getElementById('batches-list');
-            list.innerHTML = '';
-            loturiArray.forEach((lot) => {
-                list.innerHTML += `
-                    <div class="card-row" style="background: var(--bg-color); padding: 10px; border-radius:10px; margin-top:10px;">
-                        <div style="display:flex; flex-direction:column; align-items:center;">
-                            <span style="font-size:0.8rem; color:var(--text-sec)">Buc</span>
-                            <input type="number" value="${lot.cantitate}" class="input-field" style="width:50px; text-align:center; padding:5px; margin:0; font-weight:bold;" onchange="actualizeazaCantitateLot('${lot.id}', this.value)">
-                        </div>
-                        <div style="display:flex; flex-direction:column; align-items:center;">
-                            <span style="font-size:0.8rem; color:var(--text-sec)">Expiră pe</span>
-                            ${isDrojdii 
-                                ? `<input type="text" value="${lot.dataExp}" class="input-field" style="color:var(--danger); font-weight:bold; width:90px; text-align:center; padding:5px; margin:0;" onchange="actualizeazaDataExpDirect('${lot.id}', this.value)">`
-                                : `<strong style="color:var(--danger)">${lot.dataExp}</strong>`}
-                        </div>
-                        <div style="display:flex; flex-direction:column; align-items:center;">
-                            <span style="font-size:0.8rem; color:var(--text-sec)">Data Prod.</span>
-                            ${isDrojdii 
-                                ? `<span style="font-size:0.8rem; color:var(--border); margin-top:10px;">N/A</span>`
-                                : `<input type="text" value="${lot.dataProd}" class="input-field" style="width:90px; text-align:center; padding:5px; margin:0;" onchange="actualizeazaDataProdLot('${lot.id}', this.value)">`}
-                        </div>
-                        <button class="btn-danger" onclick="stergeLotFirebase('${lot.id}')"><i class="fas fa-times-circle"></i></button>
-                    </div>`;
-            });
-        });
-        
-        goTo('page-product');
-    }
-
-    function deschideModalLot() {
-        document.getElementById('batch-qty').value = '';
-        document.getElementById('batch-date').value = '';
-        let eticheta = document.getElementById('batch-date-label');
-        if (produsCurent.categorie === 'Drojdii') {
-            eticheta.innerText = "Data Expirării (ZZ.LL.AAAA)";
-            eticheta.style.color = "var(--danger)";
-        } else {
-            eticheta.innerText = "Data Prod. (ZZ.LL.AAAA)";
-            eticheta.style.color = "var(--text-sec)";
-        }
-        showModal('modal-batch');
-    }
-
-    function actualizeazaCantitateLot(lotId, nouaValoare) {
-        db.collection("loturi").doc(lotId).update({ cantitate: parseInt(nouaValoare) || 0 }).then(() => setActualizat());
-    }
-
-    function actualizeazaDataProdLot(lotId, nouaDataProd) {
-        let expirareActualizata = calculeazaExpirare(nouaDataProd, produsCurent.categorie);
-        if(expirareActualizata !== "Dată invalidă") {
-            db.collection("loturi").doc(lotId).update({ dataProd: nouaDataProd, dataExp: expirareActualizata }).then(() => setActualizat());
-        } else { alert("Dată invalidă! Formula: ZZ.LL.AAAA"); }
-    }
-
-    function actualizeazaDataExpDirect(lotId, nouaDataExp) {
-        if(convertDataToTime(nouaDataExp) < 8000000000000000) {
-            db.collection("loturi").doc(lotId).update({ dataExp: nouaDataExp }).then(() => setActualizat());
-        } else { alert("Dată invalidă! Formula: ZZ.LL.AAAA"); }
-    }
-
-    function setActualizat() {
-        const now = new Date(); document.getElementById('data-actualizare').innerText = `Actualizat - ${now.getDate()}.${now.getMonth()+1}.${now.getFullYear()}`;
-    }
-
-    function formateazaData(val) {
-        if(!val) return;
-        let d = new Date(val);
-        document.getElementById('batch-date').value = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
-    }
-
-    function calculeazaExpirare(dataProdStr, categorie) {
-        let parts = dataProdStr.split('.'); if(parts.length !== 3) return "Dată invalidă";
-        let prodDate = new Date(parts[2], parts[1] - 1, parts[0]);
-        if(!catalogCategorii[categorie]) return "Calculată";
-
-        let termVal = parseInt(catalogCategorii[categorie].termen) || 0;
-        let termUnit = catalogCategorii[categorie].unit;
-
-        if (termUnit === 'zile') prodDate.setDate(prodDate.getDate() + termVal);
-        else if (termUnit === 'luni') prodDate.setMonth(prodDate.getMonth() + termVal);
-
-        return `${String(prodDate.getDate()).padStart(2, '0')}.${String(prodDate.getMonth() + 1).padStart(2, '0')}.${prodDate.getFullYear()}`;
-    }
-
-    function adaugaLot() {
-        const qty = parseInt(document.getElementById('batch-qty').value) || 0;
-        const dateStr = document.getElementById('batch-date').value;
-        
-        if(dateStr && produsCurent.id) {
-            let isDrojdii = produsCurent.categorie === 'Drojdii';
-            let expirareStr = isDrojdii ? dateStr : calculeazaExpirare(dateStr, produsCurent.categorie);
-            let prodStr = isDrojdii ? "N/A" : dateStr;
-            
-            db.collection("loturi").add({
-                produsId: produsCurent.id, cantitate: qty, dataProd: prodStr, dataExp: expirareStr, timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            }).then(() => {
-                setActualizat(); closeModal('modal-batch');
-            });
-        } else { alert('Introduceți măcar data!'); }
-    }
-
-    function stergeLotFirebase(id) {
-        cereConfirmare("Ștergere Lot", "Ești sigur că vrei să ștergi definitiv acest lot?", () => { db.collection("loturi").doc(id).delete(); });
-    }
-
-    function trimiteInSheets() {
-        const val = document.getElementById('stoc-manual').value;
-        if(val) alert(`S-a trimis către Google Sheets!\nStoc: ${val}`);
-        else alert("Introdu o valoare în Stoc mai întâi!");
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        setTheme('system');
-        renderSetariRetele();
-        renderSetariProprietati();
-        renderSetariCategorii();
-        incarcaSetariTimp();
-        
-        let loadedCount = 0;
-        const total = 4; 
-
-        function checkReady() {
-            loadedCount++;
-            if (loadedCount === total) {
-                const loader = document.getElementById('app-loader');
-                if (loader) {
-                    loader.style.opacity = '0';
-                    setTimeout(() => { loader.style.display = 'none'; }, 300); // 300ms fade-out
-                }
             }
         }
+    </script>
 
-        db.collection("sectoare").onSnapshot(s => { 
-            dbSectoare = {}; s.forEach(d => dbSectoare[d.id] = {id: d.id, ...d.data()}); 
-            renderListaSectoare(); renderToateExpirarile(); checkReady(); 
-        });
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 8px; }
+        .sortable-ghost { opacity: 0.4; transform: scale(0.98); }
+    </style>
+</head>
+<body class="bg-bg-color dark:bg-dark-bg text-text-main dark:text-dark-text-main transition-colors duration-300 m-0">
+
+<div id="root" class="max-w-[600px] mx-auto min-h-screen relative shadow-2xl bg-bg-color dark:bg-dark-bg"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useMemo, useRef, createContext, useContext } = React;
+
+    // ==========================================
+    // 2. FIREBASE CONFIG & LAYER
+    // ==========================================
+    const firebaseConfig = {
+        apiKey: "AIzaSyB7O1CAvbXloK379wXKwDY1SObgox7jf3U", authDomain: "liada-f7c95.firebaseapp.com",
+        projectId: "liada-f7c95", storageBucket: "liada-f7c95.firebasestorage.app",
+        messagingSenderId: "232514890985", appId: "1:232514890985:web:b6914e6b79682a90ca9478"
+    };
+
+    if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+    const db = firebase.firestore();
+    db.enablePersistence().catch(err => console.warn("Offline DB Error:", err));
+
+    const FirebaseService = {
+        add: (collection, data) => db.collection(collection).add({ ...data, timestamp: firebase.firestore.FieldValue.serverTimestamp() }),
+        update: (collection, id, data) => db.collection(collection).doc(id).update(data),
+        delete: (collection, id) => db.collection(collection).doc(id).delete(),
+        batchUpdate: (collection, updates) => {
+            const batch = db.batch();
+            updates.forEach(u => batch.update(db.collection(collection).doc(u.id), u.data));
+            return batch.commit();
+        }
+    };
+
+    // ==========================================
+    // 3. CONSTANTE (CONFIG & MAGIC STRINGS)
+    // ==========================================
+    const PAGES = { MAIN: 'main', SETTINGS: 'settings', SECTOR: 'sector', STORE: 'store', PRODUCT: 'product' };
+    
+    const MODAL_TYPES = {
+        CONFIRM: 'confirm', PROMPT: 'prompt',
+        ADD_SECTOR: 'add_sector', EDIT_SECTOR: 'edit_sector',
+        ADD_STORE: 'add_store', EDIT_STORE: 'edit_store',
+        ADD_PRODUCT: 'add_product', ADD_LOT: 'add_lot',
+        ADD_RET: 'add_ret', EDIT_RET: 'edit_ret', ADD_PROP: 'add_prop'
+    };
+
+    const CONFIG = {
+        COLORS: { LIADA_HEADER: '#ff3b30', SETTINGS_HEADER: '#333333', DEFAULT_SECTOR: '#007aff', DEFAULT_STORE: '#4CAF50' },
+        DEFAULT_CATALOG: {
+            "Maioneză - pachete": { termen: 180, unit: "zile", produse: ["🟢 De Casă 185g", "🟡 Provensal 185g", "🟢 De Casă 370g", "🟡 Provensal 370g", "🟢 De Casă 600g", "🟡 Provensal 600g", "🔴 De Elită 450g", "🔴 De Elită 650g", "🟤 Profi 370g"] },
+            "Maioneze - căldări": { termen: 120, unit: "zile", produse: ["🔵 Delicios 850ml", "🟢 De Casă 850ml", "🟡 Provensal 850ml", "🟢 De Casă 1.4l", "🟡 Provensal 1.4l", "🟡 Provensal 630g"] },
+            "Ketchup": { termen: 180, unit: "zile", produse: ["⚫ Chili 275g", "🟢 Frigărui 275g"] },
+            "Paste de tomat": { termen: 180, unit: "zile", produse: ["🔵 Tomate 70g", "🔵 Tomate 275g"] },
+            "Muștar": { termen: 120, unit: "zile", produse: ["🟡 Rusesc 200g"] },
+            "Oțet": { termen: 12, unit: "luni", produse: ["🟤 Acid Acetic de Mere 5%", "🟢 Acid Acetic 6%", "🟡 Acid Acetic 9%"] },
+            "Drojdii": { termen: 0, unit: "zile", produse: ["🟡 Secretul Bunicii 50g"] }
+        },
+        DEFAULT_RETELE: [{ nume: 'Local', culoare: '#4CAF50' }, { nume: 'Linella', culoare: '#E53935' }],
+        DEFAULT_PROPS: ['Manager']
+    };
+
+    // ==========================================
+    // 4. HELPER FUNCTIONS
+    // ==========================================
+    const Helpers = {
+        convertDataToTime: (dateStr) => {
+            if(!dateStr || dateStr === "Dată invalidă" || dateStr === "Calculată") return new Date(8640000000000000).getTime();
+            let parts = dateStr.split('.'); if(parts.length !== 3) return new Date(8640000000000000).getTime();
+            return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+        },
+        calculeazaExpirare: (dataProdStr, categorieObj) => {
+            let parts = dataProdStr.split('.'); if(parts.length !== 3) return "Dată invalidă";
+            let prodDate = new Date(parts[2], parts[1] - 1, parts[0]);
+            if(!categorieObj) return "Calculată";
+            let termVal = parseInt(categorieObj.termen) || 0;
+            if (categorieObj.unit === 'zile') prodDate.setDate(prodDate.getDate() + termVal);
+            else if (categorieObj.unit === 'luni') prodDate.setMonth(prodDate.getMonth() + termVal);
+            return `${String(prodDate.getDate()).padStart(2, '0')}.${String(prodDate.getMonth() + 1).padStart(2, '0')}.${prodDate.getFullYear()}`;
+        },
+        sortByOrder: (arr) => arr.sort((a,b) => (a.order ?? a.timestamp?.toMillis() ?? 0) - (b.order ?? b.timestamp?.toMillis() ?? 0)),
+        initSortable: (container, dataRef, collectionName) => {
+            return new Sortable(container, {
+                animation: 150, delay: 200, delayOnTouchOnly: true, touchStartThreshold: 5, ghostClass: 'sortable-ghost',
+                onEnd: (evt) => {
+                    const newOrder = [...dataRef.current];
+                    const moved = newOrder.splice(evt.oldIndex, 1)[0];
+                    newOrder.splice(evt.newIndex, 0, moved);
+                    const updates = newOrder.map((item, idx) => ({ id: item.id, data: { order: idx } }));
+                    FirebaseService.batchUpdate(collectionName, updates);
+                }
+            });
+        }
+    };
+
+    // ==========================================
+    // 5. REUSABLE COMPONENTS
+    // ==========================================
+    const PrimaryButton = ({ children, onClick, className="" }) => <button onClick={onClick} className={`flex-[2] p-4 font-[900] text-white uppercase text-[0.8rem] bg-accent rounded-xl shadow-lg hover:bg-blue-700 transition-colors ${className}`}>{children}</button>;
+    const SecondaryButton = ({ children, onClick, className="" }) => <button onClick={onClick} className={`flex-1 p-4 font-[900] text-text-sec uppercase text-[0.8rem] bg-gray-100 dark:bg-gray-800 rounded-xl hover:opacity-80 transition-colors ${className}`}>{children}</button>;
+    const DangerButton = ({ children, onClick, className="" }) => <button onClick={onClick} className={`flex-[2] p-4 font-[900] text-white uppercase text-[0.8rem] bg-danger rounded-xl shadow-lg transition-colors ${className}`}>{children}</button>;
+
+    const ButtonIcon = ({ icon, onClick, className = "", style }) => <button onClick={onClick} className={`bg-transparent border-none text-xl p-2 cursor-pointer ${className}`} style={style}><i className={icon}></i></button>;
+    const ButtonDanger = ({ icon, onClick, className = "" }) => <button onClick={onClick} className={`bg-transparent border-none text-danger text-[1.2rem] cursor-pointer p-1 ${className}`}><i className={icon}></i></button>;
+    
+    const Input = (props) => <input {...props} className={`w-full p-3 mt-1 border border-border-color dark:border-dark-border rounded-xl bg-bg-color dark:bg-dark-bg text-text-main dark:text-white outline-none focus:border-accent font-medium ${props.className || ''}`} />;
+    const Select = (props) => <select {...props} className={`w-full p-3 mt-1 border border-border-color dark:border-dark-border rounded-xl bg-bg-color dark:bg-dark-bg text-text-main dark:text-white outline-none focus:border-accent font-medium ${props.className || ''}`}>{props.children}</select>;
+
+    const Card = ({ children, className = "", onClick, style, id }) => <div id={id} onClick={onClick} style={style} className={`bg-surface-color dark:bg-dark-surface m-4 p-4 rounded-[15px] shadow-sm relative transition-all ${onClick ? 'cursor-pointer active:scale-[0.98]' : ''} ${className}`}>{children}</div>;
+    const CardRow = ({ children, className = "", onClick }) => <div onClick={onClick} className={`flex justify-between items-center py-2.5 border-b border-border-color dark:border-dark-border last:border-b-0 ${onClick ? 'cursor-pointer' : ''} ${className}`}>{children}</div>;
+
+    const FAB = ({ onClick }) => <button onClick={onClick} className="fixed bottom-[30px] right-[30px] w-[64px] h-[64px] rounded-full bg-surface-color/90 dark:bg-dark-surface/90 backdrop-blur-md text-accent border border-border-color dark:border-dark-border text-[1.8rem] shadow-lg cursor-pointer z-[99] flex justify-center items-center hover:scale-105 transition-transform"><i className="fas fa-plus"></i></button>;
+
+    const FrozenHeader = ({ title, subtitle, bgColor, actions, nav }) => (
+        <div className="sticky top-2.5 m-2.5 p-[15px_20px] rounded-[25px] flex flex-col gap-2 z-[100] shadow-lg text-white backdrop-blur-md" style={{ backgroundColor: bgColor }}>
+            <div className="flex justify-between items-center border-b border-white/30 pb-1.5">
+                <div>
+                    <h2 className="m-0 text-[1.6rem] font-[900] leading-tight text-white">{title}</h2>
+                    {subtitle && <p className="m-0 text-[0.9rem] opacity-90 font-medium text-white">{subtitle}</p>}
+                </div>
+                <div className="flex gap-1 text-white items-center">{actions}</div>
+            </div>
+            {nav && <div className="flex gap-[20px] justify-center pt-1">{nav}</div>}
+        </div>
+    );
+
+    const BaseModal = ({ isOpen, title, children }) => {
+        if (!isOpen) return null;
+        return (
+            <div className="fixed inset-0 bg-black/60 z-[1000] flex justify-center items-center backdrop-blur-sm">
+                <div className="bg-surface-color dark:bg-dark-surface p-6 rounded-[24px] w-[90%] max-w-[420px] shadow-2xl animate-scale-in">
+                    <h3 className="mt-0 mb-4 text-xl font-black">{title}</h3>
+                    {children}
+                </div>
+            </div>
+        );
+    };
+
+    // ==========================================
+    // 6. CONTEXT & STATE MANAGEMENT
+    // ==========================================
+    const AppContext = createContext();
+    const useApp = () => useContext(AppContext);
+
+    const AppProvider = ({ children }) => {
+        const [isReady, setIsReady] = useState(false);
+        const [view, setView] = useState({ page: PAGES.MAIN, data: null });
+        const [theme, setTheme] = useState(localStorage.getItem('theme') || 'system');
+        const [modal, setModal] = useState({ type: null, data: null }); 
+
+        const [dbSectoare, setDbSectoare] = useState({});
+        const [dbMagazine, setDbMagazine] = useState({});
+        const [dbProduse, setDbProduse] = useState({});
+        const [dbLoturi, setDbLoturi] = useState({});
+
+        const [catalogCategorii, setCatalogCategorii] = useState(JSON.parse(localStorage.getItem('catalogCategorii')) || CONFIG.DEFAULT_CATALOG);
+        const [reteleMagazine, setReteleMagazine] = useState(JSON.parse(localStorage.getItem('reteleMagazine')) || CONFIG.DEFAULT_RETELE);
+        const [proprietatiMagazine, setProprietatiMagazine] = useState(JSON.parse(localStorage.getItem('proprietatiMagazine')) || CONFIG.DEFAULT_PROPS);
         
-        db.collection("magazine").onSnapshot(s => { 
-            dbMagazine = {}; s.forEach(d => dbMagazine[d.id] = {id: d.id, ...d.data()}); 
-            if(sectorCurentId) renderMagazineDinSector(); renderToateExpirarile(); checkReady(); 
-        });
+        const getExpConf = (lvl, defVal, defUnit) => ({ val: Math.max(0, parseInt(localStorage.getItem(`expTimeVal_${lvl}`)) || defVal), unit: localStorage.getItem(`expTimeUnit_${lvl}`) || defUnit });
+        const [expConfigs, setExpConfigs] = useState({ global: getExpConf('global', 2, 'luni'), sector: getExpConf('sector', 1, 'luni'), store: getExpConf('store', 2, 'saptamani') });
+
+        // Storage Updates
+        const updateCatalog = (newCat) => { setCatalogCategorii(newCat); localStorage.setItem('catalogCategorii', JSON.stringify(newCat)); };
+        const updateRetele = (newRet) => { setReteleMagazine(newRet); localStorage.setItem('reteleMagazine', JSON.stringify(newRet)); };
+        const updateProp = (newProp) => { setProprietatiMagazine(newProp); localStorage.setItem('proprietatiMagazine', JSON.stringify(newProp)); };
+        const updateExpConfig = (type, val, unit) => { localStorage.setItem(`expTimeVal_${type}`, val); localStorage.setItem(`expTimeUnit_${type}`, unit); setExpConfigs(prev => ({ ...prev, [type]: { val, unit } })); };
+
+        // Modal Helpers
+        const openModal = (type, data = null) => setModal({ type, data });
+        const closeModal = () => setModal({ type: null, data: null });
+        const confirmAction = (title, msg, onConfirm) => openModal(MODAL_TYPES.CONFIRM, { title, msg, onConfirm });
+        const promptAction = (title, val, placeholder, onSave) => openModal(MODAL_TYPES.PROMPT, { title, val, placeholder, onSave });
+
+        // Theme sync
+        useEffect(() => {
+            if (theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark'); document.body.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.classList.remove('dark'); document.body.setAttribute('data-theme', 'light');
+            }
+            localStorage.setItem('theme', theme);
+        }, [theme]);
+
+        // Firebase Sync
+        useEffect(() => {
+            let loads = 0; const checkReady = () => { loads++; if(loads === 4) setTimeout(() => setIsReady(true), 300); };
+            const u1 = db.collection('sectoare').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbSectoare(obj); checkReady(); });
+            const u2 = db.collection('magazine').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbMagazine(obj); checkReady(); });
+            const u3 = db.collection('produse_magazin').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbProduse(obj); checkReady(); });
+            const u4 = db.collection('loturi').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbLoturi(obj); checkReady(); });
+            return () => { u1(); u2(); u3(); u4(); };
+        }, []);
+
+        // History API (Swipe Back logic)
+        const uiDepthRef = useRef(0);
+        const popLockRef = useRef(false);
+
+        const closeTopLayer = () => {
+            if (modal.type) { closeModal(); return true; }
+            if (view.page === PAGES.PRODUCT) { setView({page: PAGES.STORE, data: view.data.backData}); return true; }
+            if (view.page === PAGES.STORE) { setView({page: PAGES.SECTOR, data: view.data.sector}); return true; }
+            if (view.page === PAGES.SECTOR || view.page === PAGES.SETTINGS) { setView({page: PAGES.MAIN, data: null}); return true; }
+            return false;
+        };
+
+        const getUiDepth = () => {
+            let d = 0;
+            if (view.page === PAGES.SECTOR || view.page === PAGES.SETTINGS) d = 1;
+            if (view.page === PAGES.STORE) d = 2;
+            if (view.page === PAGES.PRODUCT) d = 3;
+            if (modal.type) d++;
+            return d;
+        };
+
+        useEffect(() => { history.replaceState({ appDepth: 0 }, document.title); }, []);
+
+        useEffect(() => {
+            const depth = getUiDepth();
+            if (popLockRef.current) { uiDepthRef.current = depth; popLockRef.current = false; return; }
+            if (depth > uiDepthRef.current) { history.pushState({ appDepth: depth }, document.title); }
+            uiDepthRef.current = depth;
+        }, [view, modal]);
+
+        useEffect(() => {
+            const onPopState = () => { popLockRef.current = true; closeTopLayer(); };
+            window.addEventListener('popstate', onPopState);
+            return () => window.removeEventListener('popstate', onPopState);
+        }, [view, modal]);
+
+        const contextValue = {
+            isReady, view, setView, theme, setTheme, modal, openModal, closeModal, confirmAction, promptAction,
+            dbSectoare, dbMagazine, dbProduse, dbLoturi,
+            catalogCategorii, updateCatalog, reteleMagazine, updateRetele, proprietatiMagazine, updateProp, expConfigs, updateExpConfig
+        };
+
+        return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
+    };
+
+    // --- Componentă Expirări Reutilizabilă ---
+    const ExpirariBox = ({ type, data }) => {
+        const { dbSectoare, dbMagazine, dbProduse, dbLoturi, expConfigs, updateExpConfig, setView } = useApp();
+        const config = expConfigs[type];
+        const [val, setVal] = useState(config.val);
+        const [unit, setUnit] = useState(config.unit);
+
+        const handleConfigChange = (newVal, newUnit) => { setVal(newVal); setUnit(newUnit); updateExpConfig(type, newVal, newUnit); };
+
+        const zileMaxime = useMemo(() => {
+            if(unit === 'saptamani') return val * 7; if(unit === 'luni') return val * 30; return val;
+        }, [val, unit]);
+
+        const items = useMemo(() => {
+            let arr = []; let msAzi = new Date().setHours(0,0,0,0);
+            for(let lotId in dbLoturi) {
+                let lot = dbLoturi[lotId]; let expTime = Helpers.convertDataToTime(lot.dataExp);
+                if(expTime > 8000000000000000) continue; 
+                let zileRamase = Math.round((expTime - msAzi) / (1000 * 3600 * 24));
+                
+                let prod = dbProduse[lot.produsId]; if(!prod) continue;
+                let mag = dbMagazine[prod.magazinId]; if(!mag) continue;
+                let sec = dbSectoare[mag.sectorId]; if(!sec) continue;
+
+                if (zileRamase <= zileMaxime) {
+                    if (type === 'global' || (type === 'sector' && data.currentSectorId === sec.id) || (type === 'store' && data.currentStoreId === mag.id)) {
+                        arr.push({ lot, prod, mag, sec, zile: zileRamase });
+                    }
+                }
+            }
+            return arr.sort((a, b) => a.zile - b.zile);
+        }, [dbSectoare, dbMagazine, dbProduse, dbLoturi, zileMaxime, type, data?.currentSectorId, data?.currentStoreId]);
+
+        return (
+            <Card className="!border-[1.5px] !border-danger !shadow-lg">
+                <div className="flex justify-between items-center font-bold text-[1.1rem] text-danger flex-wrap gap-2 border-b border-danger/20 pb-3">
+                    <span className="flex items-center gap-2"><i className="fas fa-exclamation-circle text-xl"></i> Expiră în curând</span>
+                    <div className="flex gap-2 items-center bg-transparent border border-border-color dark:border-dark-border p-1.5 rounded-xl">
+                        <input type="number" min="0" value={val} onChange={e => handleConfigChange(Math.max(0, parseInt(e.target.value)||0), unit)} className="w-[45px] bg-transparent text-center font-bold outline-none text-text-main dark:text-dark-text-main" />
+                        <select value={unit} onChange={e => handleConfigChange(val, e.target.value)} className="bg-transparent dark:bg-dark-surface font-bold outline-none cursor-pointer text-text-main dark:text-white">
+                            <option value="zile" className="dark:bg-dark-surface dark:text-white">Zile</option>
+                            <option value="saptamani" className="dark:bg-dark-surface dark:text-white">Săpt.</option>
+                            <option value="luni" className="dark:bg-dark-surface dark:text-white">Luni</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="pt-2">
+                    {items.length === 0 ? (
+                        <div className="p-4 text-center text-text-sec font-medium">Toate produsele sunt în termen.</div>
+                    ) : items.map((item, idx) => (
+                        <div key={idx} className="border-b border-border-color dark:border-dark-border py-4 flex justify-between items-start last:border-0">
+                            <div className="flex-1 pr-2">
+                                <div className="mb-2 cursor-pointer font-black text-[1.05rem]" onClick={() => setView({page: PAGES.PRODUCT, data: { id: item.prod.id, nume: item.prod.nume, categorie: item.prod.categorie, magazinCuloare: item.mag.culoare, magazinNume: item.mag.nume, magazinAdresa: item.mag.adresa, backData: {magazin: item.mag, sector: item.sec} }})}>
+                                    {item.prod.nume} <span className="text-text-sec font-medium text-[0.9rem]">({item.lot.cantitate} buc)</span>
+                                </div>
+                                <div className="text-[0.9rem] mb-3 font-medium text-danger">
+                                    {item.zile < 0 ? <span>A expirat de {Math.abs(item.zile)} zile</span> : 
+                                     item.zile === 0 ? <span>Expiră ASTĂZI</span> : 
+                                     <span>Va expira în {item.zile} zile</span>}
+                                </div>
+                                {(type === 'global' || type === 'sector') && (
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {type === 'global' && (
+                                            <span onClick={() => setView({page: PAGES.SECTOR, data: item.sec})} className="inline-flex items-center gap-1.5 px-3 py-1 bg-surface-color dark:bg-dark-surface text-text-main dark:text-dark-text-main rounded-xl text-[0.75rem] font-bold cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 shadow-sm border border-border-color/50 dark:border-dark-border/50">
+                                                <i className="fas fa-map" style={{color: item.sec.culoare}}></i> {item.sec.nume}
+                                            </span>
+                                        )}
+                                        <span onClick={() => setView({page: PAGES.STORE, data: {magazin: item.mag, sector: item.sec}})} className="inline-flex items-center gap-1.5 px-3 py-1 bg-surface-color dark:bg-dark-surface text-text-main dark:text-dark-text-main rounded-xl text-[0.75rem] font-bold cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 shadow-sm border border-border-color/50 dark:border-dark-border/50">
+                                            <i className="fas fa-store" style={{color: item.mag.culoare}}></i> {item.mag.nume}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="text-danger text-[1.1rem] font-black self-center">
+                                {item.lot.dataExp}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </Card>
+        );
+    };
+
+    // ==========================================
+    // 7. PAGE COMPONENTS
+    // ==========================================
+    const MainPage = () => {
+        const { setView, dbSectoare, confirmAction, openModal, modal, closeModal } = useApp();
+        const arrSectoare = Helpers.sortByOrder(Object.values(dbSectoare));
         
-        db.collection("produse_magazin").onSnapshot(s => { 
-            dbProduse = {}; s.forEach(d => dbProduse[d.id] = {id: d.id, ...d.data()}); 
-            renderToateExpirarile(); checkReady(); 
-        });
+        const containerRef = useRef(null);
+        const dataRef = useRef(arrSectoare);
+        dataRef.current = arrSectoare;
+        const [newSect, setNewSect] = useState({ nume: '', culoare: CONFIG.COLORS.DEFAULT_SECTOR });
+
+        useEffect(() => {
+            if (containerRef.current) {
+                const sortable = Helpers.initSortable(containerRef.current, dataRef, 'sectoare');
+                return () => sortable.destroy();
+            }
+        }, []);
+
+        const handleSave = () => {
+            if(newSect.nume) { FirebaseService.add('sectoare', { ...newSect, order: arrSectoare.length }); closeModal(); }
+        };
+
+        return (
+            <div className="animate-fade-in pb-[100px]">
+                <FrozenHeader title="LIADA" bgColor={CONFIG.COLORS.LIADA_HEADER} actions={<ButtonIcon icon="fas fa-cog text-white" onClick={() => setView({page: PAGES.SETTINGS})} />} />
+                
+                <div className="p-2" ref={containerRef}>
+                    {arrSectoare.length === 0 ? <div className="p-5 text-center text-text-sec font-medium">Nu există sectoare adăugate.</div> : null}
+                    {arrSectoare.map(s => (
+                        <Card key={s.id} onClick={() => setView({page: PAGES.SECTOR, data: s})} className="text-white !p-0 overflow-hidden !rounded-[25px]" style={{backgroundColor: s.culoare || CONFIG.COLORS.DEFAULT_SECTOR}}>
+                            <div className="flex justify-between items-center p-[20px] font-black text-[1.2rem]">
+                                {s.nume}
+                                <ButtonIcon icon="fas fa-trash text-white" onClick={(e) => { e.stopPropagation(); confirmAction("Ștergere", "Ștergi sectorul?", () => FirebaseService.delete('sectoare', s.id)); }} />
+                            </div>
+                        </Card>
+                    ))}
+                </div>
+
+                <ExpirariBox type="global" />
+                <FAB onClick={() => { setNewSect({ nume: '', culoare: CONFIG.COLORS.DEFAULT_SECTOR }); openModal(MODAL_TYPES.ADD_SECTOR); }} />
+
+                <BaseModal isOpen={modal.type === MODAL_TYPES.ADD_SECTOR} title="Adaugă Sector">
+                    <Input placeholder="Denumire Sector" value={newSect.nume} onChange={e => setNewSect({...newSect, nume: e.target.value})} />
+                    <Input type="color" value={newSect.culoare} onChange={e => setNewSect({...newSect, culoare: e.target.value})} className="!h-[50px] !p-[3px] cursor-pointer" />
+                    <div className="flex gap-3 pt-5 mt-2">
+                        <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
+                        <PrimaryButton onClick={handleSave}>Salvează</PrimaryButton>
+                    </div>
+                </BaseModal>
+            </div>
+        );
+    };
+
+    const SettingsPage = () => {
+        const { setView, theme, setTheme, reteleMagazine, updateRetele, proprietatiMagazine, updateProp, catalogCategorii, updateCatalog, promptAction, confirmAction, openModal, modal, closeModal } = useApp();
+        const [newRet, setNewRet] = useState({ nume: '', culoare: CONFIG.COLORS.DEFAULT_SECTOR });
+        const [newProp, setNewProp] = useState('');
+
+        return (
+            <div className="animate-fade-in pb-[100px]">
+                <FrozenHeader title="Setări" bgColor={CONFIG.COLORS.SETTINGS_HEADER} actions={<ButtonIcon icon="fas fa-times text-white" onClick={() => setView({page: PAGES.MAIN})}/>} />
+                
+                <Card><CardRow>
+                    <span className="font-bold">Tema Aplicației</span>
+                    <Select value={theme} onChange={e => setTheme(e.target.value)} className="!w-auto !m-0 !p-2">
+                        <option value="system">Sistem</option><option value="light">Albă</option><option value="dark">Neagră</option>
+                    </Select>
+                </CardRow></Card>
+
+                <Card>
+                    <div className="flex justify-between items-center font-bold text-[1.1rem] mb-2">Rețele Magazine <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-50 dark:!bg-blue-900/30 !rounded-full" onClick={() => { setNewRet({ nume: '', culoare: CONFIG.COLORS.DEFAULT_SECTOR }); openModal(MODAL_TYPES.ADD_RET); }}/></div>
+                    {reteleMagazine.map((r, i) => (
+                        <CardRow key={i}>
+                            <div className="flex items-center gap-3">
+                                <span className="w-5 h-5 rounded-full shadow-sm" style={{backgroundColor: r.culoare}}></span> 
+                                <span className="font-bold">{r.nume}</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <ButtonIcon icon="fas fa-pen" className="!text-accent !text-[1rem] !p-1" onClick={() => openModal(MODAL_TYPES.EDIT_RET, { index: i, nume: r.nume, culoare: r.culoare, oldName: r.nume })} />
+                                <ButtonDanger icon="fas fa-trash" onClick={() => confirmAction("Șterge rețea", "Sigur?", () => { let nr = [...reteleMagazine]; nr.splice(i,1); updateRetele(nr); })}/>
+                            </div>
+                        </CardRow>
+                    ))}
+                </Card>
+
+                <Card>
+                    <div className="flex justify-between items-center font-bold text-[1.1rem] mb-2">Detalii magazine <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-50 dark:!bg-blue-900/30 !rounded-full" onClick={() => { setNewProp(''); openModal(MODAL_TYPES.ADD_PROP); }}/></div>
+                    {proprietatiMagazine.map((p, i) => (
+                        <CardRow key={i}>Câmp: {p} <ButtonDanger icon="fas fa-trash" onClick={() => confirmAction("Șterge câmp", "Sigur?", () => { let np = [...proprietatiMagazine]; np.splice(i,1); updateProp(np); })}/></CardRow>
+                    ))}
+                </Card>
+
+                <Card>
+                    <div className="flex justify-between items-center font-bold text-[1.1rem] mb-2">Produse & Valabilitate <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-50 dark:!bg-blue-900/30 !rounded-full" onClick={() => promptAction("Categorie Nouă", "", "Ex: Dulciuri", (n) => { if(!catalogCategorii[n]){ updateCatalog({...catalogCategorii, [n]: {termen: 30, unit: 'zile', produse: []}}); } })}/></div>
+                    <div className="mt-3">
+                        {Object.entries(catalogCategorii).map(([catName, catData]) => {
+                            const isDrojdii = catName === 'Drojdii';
+                            return (
+                                <Card key={catName} className="!m-[0_0_15px_0] border border-border-color dark:border-dark-border !shadow-none !p-3">
+                                    <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
+                                        <div className="font-black flex items-center gap-2 text-[1.05rem]">
+                                            {catName} <ButtonIcon icon="fas fa-pen" className="!text-accent !text-[0.9rem] !p-1" onClick={() => promptAction("Redenumește", catName, "Nume", (newName) => { if(newName && newName !== catName){ let c={...catalogCategorii}; c[newName]=c[catName]; delete c[catName]; updateCatalog(c); db.collection("produse_magazin").where("categorie","==",catName).get().then(s=>{let b=db.batch(); s.forEach(d=>b.update(d.ref,{categorie:newName})); b.commit();}); } })}/>
+                                        </div>
+                                        <div className="flex gap-2 items-center bg-gray-100 dark:bg-gray-800 p-1.5 rounded-xl">
+                                            {!isDrojdii ? (
+                                                <React.Fragment>
+                                                    <input type="number" min="0" value={catData.termen} onChange={e => { let c={...catalogCategorii}; let val=parseInt(e.target.value); if(isNaN(val)||val<0)val=0; c[catName].termen=val; updateCatalog(c); }} className="w-[50px] bg-transparent text-center font-bold outline-none" />
+                                                    <select value={catData.unit} onChange={e => { let c={...catalogCategorii}; c[catName].unit=e.target.value; updateCatalog(c); }} className="bg-transparent font-bold outline-none cursor-pointer pr-1">
+                                                        <option value="zile">Zile</option><option value="luni">Luni</option>
+                                                    </select>
+                                                </React.Fragment>
+                                            ) : <span className="text-[0.8rem] text-danger font-bold px-2">Exp. Manuală</span>}
+                                        </div>
+                                    </div>
+                                    <div className="border-t border-dashed border-border-color dark:border-dark-border pt-2">
+                                        {catData.produse.map((p, idx) => (
+                                            <CardRow key={idx} className="!p-[8px_5px] !text-[0.95rem]">
+                                                <span className="font-medium">{p}</span>
+                                                <div className="flex gap-1">
+                                                    <ButtonIcon icon="fas fa-pen" className="!text-accent !text-[1rem] !p-1" onClick={() => promptAction("Redenumește", p, "Nume", (newName) => { if(newName && newName !== p){ let c={...catalogCategorii}; c[catName].produse[idx]=newName; updateCatalog(c); db.collection("produse_magazin").where("categorie","==",catName).where("nume","==",p).get().then(s=>{let b=db.batch(); s.forEach(d=>b.update(d.ref,{nume:newName})); b.commit();}); } })} />
+                                                    <ButtonDanger icon="fas fa-trash" className="!text-[1rem] !p-1" onClick={() => confirmAction("Șterge", `Elimini ${p}?`, () => { let c={...catalogCategorii}; c[catName].produse.splice(idx,1); updateCatalog(c); })} />
+                                                </div>
+                                            </CardRow>
+                                        ))}
+                                        <button onClick={() => promptAction(`Adaugă în ${catName}`, "", "Nume produs", (n) => { let c={...catalogCategorii}; c[catName].produse.push(n); updateCatalog(c); })} className="bg-blue-50 dark:bg-blue-900/30 border-none text-accent font-bold rounded-xl p-3 mt-2 w-full text-center cursor-pointer"><i className="fas fa-plus mr-1"></i> Adaugă Produs</button>
+                                    </div>
+                                </Card>
+                            )
+                        })}
+                    </div>
+                </Card>
+
+                <BaseModal isOpen={modal.type === MODAL_TYPES.ADD_RET} title="Adaugă Rețea">
+                    <Input placeholder="Nume" value={newRet.nume} onChange={e=>setNewRet({...newRet, nume:e.target.value})} />
+                    <Input type="color" value={newRet.culoare} onChange={e=>setNewRet({...newRet, culoare:e.target.value})} className="!h-[50px] !p-[3px] cursor-pointer" />
+                    <div className="flex gap-3 pt-5">
+                        <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
+                        <PrimaryButton onClick={()=>{if(newRet.nume){let nr=[...reteleMagazine]; nr.push(newRet); updateRetele(nr); closeModal();}}}>Salvează</PrimaryButton>
+                    </div>
+                </BaseModal>
+                
+                <BaseModal isOpen={modal.type === MODAL_TYPES.ADD_PROP} title="Adaugă Câmp Detalii">
+                    <Input placeholder="Ex: Telefon" value={newProp} onChange={e=>setNewProp(e.target.value)} />
+                    <div className="flex gap-3 pt-5">
+                        <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
+                        <PrimaryButton onClick={()=>{if(newProp){let np=[...proprietatiMagazine]; np.push(newProp); updateProp(np); closeModal();}}}>Salvează</PrimaryButton>
+                    </div>
+                </BaseModal>
+            </div>
+        );
+    };
+
+    const SectorPage = () => {
+        const { view, setView, dbMagazine, reteleMagazine, confirmAction, modal, openModal, closeModal } = useApp();
+        const sector = view.data;
+        const magSect = Helpers.sortByOrder(Object.values(dbMagazine).filter(m => m.sectorId === sector.id));
         
-        db.collection("loturi").onSnapshot(s => { 
-            dbLoturi = {}; s.forEach(d => dbLoturi[d.id] = {id: d.id, ...d.data()}); 
-            renderToateExpirarile(); checkReady(); 
-        });
-    });
+        const [columns, setColumns] = useState(parseInt(localStorage.getItem('storeColumns')) || 1);
+        const containerRef = useRef(null);
+        const dataRef = useRef(magSect);
+        dataRef.current = magSect;
+
+        const [newMag, setNewMag] = useState({nume: '', adresa: '', retea: (reteleMagazine[0]?.nume || 'Local')});
+        const [editSect, setEditSect] = useState({ nume: sector.nume, culoare: sector.culoare || CONFIG.COLORS.DEFAULT_SECTOR });
+
+        useEffect(() => {
+            if (containerRef.current) {
+                const sortable = Helpers.initSortable(containerRef.current, dataRef, 'magazine');
+                return () => sortable.destroy();
+            }
+        }, [columns]);
+
+        return (
+            <div className="animate-fade-in pb-[100px]">
+                {/* Butoanele Inapoi si Acasa mutate in dreapta dupa butonul creion */}
+                <FrozenHeader title={sector.nume} bgColor={sector.culoare || CONFIG.COLORS.DEFAULT_SECTOR} actions={
+                    <React.Fragment>
+                        <ButtonIcon icon="fas fa-pen text-white" onClick={()=>{ setEditSect({nume: sector.nume, culoare: sector.culoare || CONFIG.COLORS.DEFAULT_SECTOR}); openModal(MODAL_TYPES.EDIT_SECTOR); }}/>
+                        <ButtonIcon icon="fas fa-arrow-left text-white" onClick={()=>setView({page: PAGES.MAIN})}/>
+                        <ButtonIcon icon="fas fa-home text-white" onClick={()=>setView({page: PAGES.MAIN})}/>
+                    </React.Fragment>
+                } />
+                
+                {/* Selector 1/2 coloane */}
+                <div className="flex justify-end px-4 mt-2">
+                    <button onClick={() => { let c = columns === 1 ? 2 : 1; setColumns(c); localStorage.setItem('storeColumns', c); }} className="p-2 px-3 bg-surface-color dark:bg-dark-surface rounded-xl shadow-sm text-text-sec cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                        <i className={`fas ${columns === 1 ? 'fa-th-large' : 'fa-list'} text-[1.2rem]`}></i>
+                    </button>
+                </div>
+
+                <div className={`p-4 pt-2 ${columns === 2 ? 'grid grid-cols-2 gap-3' : 'flex flex-col gap-3'}`} ref={containerRef}>
+                    {magSect.length === 0 ? <div className="col-span-2 p-5 text-center text-text-sec font-medium">Nu există magazine.</div> : null}
+                    {magSect.map(m => (
+                        <Card key={m.id} onClick={()=>setView({page: PAGES.STORE, data: {magazin: m, sector: sector}})} className={`!m-0 cursor-pointer border-l-[8px] ${columns === 2 ? '!p-3' : '!pl-4'}`} style={{borderLeftColor: m.culoare || CONFIG.COLORS.DEFAULT_STORE}}>
+                            <div className={columns === 2 ? 'pr-[25px]' : 'pr-[40px]'}>
+                                <div className={`font-black leading-tight mb-1 ${columns === 2 ? 'text-[1.05rem]' : 'text-[1.2rem]'}`}>{m.nume}</div>
+                                <div className={`text-text-sec font-medium leading-tight ${columns === 2 ? 'text-[0.85rem]' : 'text-[0.95rem]'}`}>{m.adresa}</div>
+                            </div>
+                            <button className={`absolute top-1/2 -translate-y-1/2 bg-transparent border-none text-danger p-2 cursor-pointer hover:scale-110 transition-transform ${columns === 2 ? 'right-[5px] text-[1rem]' : 'right-[15px] text-[1.2rem]'}`} onClick={(e)=>{e.stopPropagation(); confirmAction("Ștergere", "Ștergi magazinul?", ()=>FirebaseService.delete('magazine', m.id));}}><i className="fas fa-trash"></i></button>
+                        </Card>
+                    ))}
+                </div>
+
+                <ExpirariBox type="sector" data={{currentSectorId: sector.id}} />
+                
+                <FAB onClick={() => { setNewMag({nume: '', adresa: '', retea: (reteleMagazine[0]?.nume || 'Local')}); openModal(MODAL_TYPES.ADD_STORE); }} />
+
+                <BaseModal isOpen={modal.type === MODAL_TYPES.ADD_STORE} title="Adaugă Magazin">
+                    <Input placeholder="Nume Magazin" value={newMag.nume} onChange={e=>setNewMag({...newMag, nume:e.target.value})} />
+                    <Input placeholder="Adresă" value={newMag.adresa} onChange={e=>setNewMag({...newMag, adresa:e.target.value})} />
+                    <Select value={newMag.retea} onChange={e=>setNewMag({...newMag, retea:e.target.value})}>
+                        {reteleMagazine.map((r,i) => <option key={i} value={r.nume}>{r.nume}</option>)}
+                    </Select>
+                    <div className="flex gap-3 pt-5">
+                        <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
+                        <PrimaryButton onClick={()=>{
+                            if(newMag.nume){
+                                let objRet = reteleMagazine.find(r=>r.nume===newMag.retea);
+                                let cul = objRet ? objRet.culoare : CONFIG.COLORS.DEFAULT_STORE;
+                                FirebaseService.add('magazine', {sectorId: sector.id, ...newMag, culoare: cul, order: magSect.length});
+                                closeModal();
+                            }
+                        }}>Salvează</PrimaryButton>
+                    </div>
+                </BaseModal>
+
+                <BaseModal isOpen={modal.type === MODAL_TYPES.EDIT_SECTOR} title="Editează Sector">
+                    <Input placeholder="Nume Sector" value={editSect.nume} onChange={e=>setEditSect({...editSect, nume:e.target.value})} />
+                    <Input type="color" value={editSect.culoare} onChange={e=>setEditSect({...editSect, culoare:e.target.value})} className="!h-[50px] !p-[3px] cursor-pointer" />
+                    <div className="flex gap-3 pt-5">
+                        <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
+                        <PrimaryButton onClick={()=>{
+                            if(editSect.nume){
+                                FirebaseService.update('sectoare', sector.id, { nume: editSect.nume, culoare: editSect.culoare });
+                                setView({page: PAGES.SECTOR, data: {...sector, nume: editSect.nume, culoare: editSect.culoare}});
+                                closeModal();
+                            }
+                        }}>Salvează</PrimaryButton>
+                    </div>
+                </BaseModal>
+            </div>
+        );
+    };
+
+    const StorePage = () => {
+        const { view, setView, dbMagazine, dbProduse, catalogCategorii, reteleMagazine, proprietatiMagazine, dbSectoare, confirmAction, modal, openModal, closeModal } = useApp();
+        const rawMagazin = view.data.magazin;
+        const sector = view.data.sector;
+        const magazin = dbMagazine[rawMagazin.id] || rawMagazin; 
+        
+        const prodInMag = Object.values(dbProduse).filter(p => p.magazinId === magazin.id);
+        const prodGrupate = {}; Object.keys(catalogCategorii).forEach(c => prodGrupate[c]=[]);
+        prodInMag.forEach(p => { if(prodGrupate[p.categorie]) prodGrupate[p.categorie].push(p); });
+
+        const [openCats, setOpenCats] = useState({});
+        const toggleCat = (c) => setOpenCats(prev => ({...prev, [c]: !prev[c]}));
+
+        const [editStore, setEditStore] = useState({ nume: magazin.nume, adresa: magazin.adresa, retea: magazin.retea, sectorId: magazin.sectorId });
+        const [newProdState, setNewProdState] = useState({ cat: '', nume: '' });
+        const allSectoare = Object.values(dbSectoare);
+        
+        const [propVals, setPropVals] = useState(magazin.proprietati || {});
+        useEffect(() => { setPropVals(magazin.proprietati || {}); }, [magazin.proprietati]);
+
+        return (
+            <div className="animate-fade-in pb-[100px]">
+                {/* Butoanele Inapoi si Acasa mutate in dreapta dupa creion */}
+                <FrozenHeader title={magazin.nume} subtitle={magazin.adresa} bgColor={magazin.culoare || CONFIG.COLORS.DEFAULT_STORE} actions={
+                    <React.Fragment>
+                        <ButtonIcon icon="fas fa-pen text-white" onClick={()=>{ setEditStore({nume: magazin.nume, adresa: magazin.adresa, retea: magazin.retea, sectorId: magazin.sectorId}); openModal(MODAL_TYPES.EDIT_STORE); }}/>
+                        <ButtonIcon icon="fas fa-arrow-left text-white" onClick={()=>setView({page: PAGES.SECTOR, data: sector})}/>
+                        <ButtonIcon icon="fas fa-home text-white" onClick={()=>setView({page: PAGES.MAIN})}/>
+                    </React.Fragment>
+                } />
+                
+                <Card>
+                    <div className="font-bold text-[1.1rem] mb-3">Detalii despre magazin</div>
+                    {proprietatiMagazine.map((p,i) => (
+                        <CardRow key={i}>
+                            <span>{p}:</span> 
+                            <Input 
+                                placeholder={`${p}...`} 
+                                className="!w-[60%] !mt-0 !p-2" 
+                                value={propVals[p] || ''} 
+                                onChange={(e) => setPropVals(prev => ({...prev, [p]: e.target.value}))}
+                                onBlur={() => FirebaseService.update('magazine', magazin.id, { proprietati: propVals })}
+                            />
+                        </CardRow>
+                    ))}
+                </Card>
+
+                <div>
+                    {Object.entries(prodGrupate).map(([cat, produse]) => {
+                        const isDeschis = openCats[cat] !== undefined ? openCats[cat] : produse.length > 0;
+                        return (
+                            <Card key={cat} className="!p-0 overflow-hidden">
+                                <div className="flex justify-between items-center font-black text-[1.1rem] cursor-pointer p-5 bg-gray-50 dark:bg-gray-800/50" onClick={()=>toggleCat(cat)}>
+                                    {cat}
+                                    <div className="flex items-center gap-[15px]">
+                                        <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-100 dark:!bg-blue-900/50 !rounded-full !p-[6px_8px] !text-[0.9rem]" onClick={(e)=>{e.stopPropagation(); setNewProdState({cat: cat, nume: ''}); openModal(MODAL_TYPES.ADD_PRODUCT);}} />
+                                        <i className={`fas fa-chevron-down text-border-color transition-transform ${isDeschis ? 'rotate-0' : 'rotate-90'}`}></i>
+                                    </div>
+                                </div>
+                                <div style={{display: isDeschis ? 'block' : 'none'}}>
+                                    {produse.length === 0 ? <div className="text-center text-text-sec text-[0.9rem] p-5 font-medium border-t border-border-color dark:border-dark-border">Niciun produs adăugat.</div> : null}
+                                    {produse.map((p, idx) => (
+                                        <div key={p.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" onClick={()=>setView({page: PAGES.PRODUCT, data: { id: p.id, nume: p.nume, categorie: cat, magazinCuloare: magazin.culoare, magazinNume: magazin.nume, magazinAdresa: magazin.adresa, backData: {magazin: magazin, sector: sector} }})}>
+                                            <div className={`flex justify-between items-center py-3 mx-5 ${idx > 0 ? 'border-t-2 border-gray-200 dark:border-gray-700' : 'border-t-2 border-transparent'}`}>
+                                                <span className="font-bold text-[1.05rem]">{p.nume}</span>
+                                                <div className="flex items-center">
+                                                    <ButtonDanger icon="fas fa-trash" className="mr-[10px] !text-[1.1rem]" onClick={(e)=>{e.stopPropagation(); confirmAction("Șterge","Sigur?",()=>FirebaseService.delete('produse_magazin', p.id));}} />
+                                                    <i className="fas fa-chevron-right text-border-color"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </Card>
+                        );
+                    })}
+                </div>
+
+                <ExpirariBox type="store" data={{currentStoreId: magazin.id}} />
+
+                <BaseModal isOpen={modal.type === MODAL_TYPES.ADD_PRODUCT} title={`Adaugă în: ${newProdState.cat}`}>
+                    <div className="text-[0.95rem] font-bold text-text-sec mb-[5px]">Alege din catalog:</div>
+                    <Select value={newProdState.nume} onChange={e=>setNewProdState({...newProdState, nume: e.target.value})}>
+                        <option value="">-- Selectează un produs --</option>
+                        {(catalogCategorii[newProdState.cat] ? catalogCategorii[newProdState.cat].produse : []).map((p,i) => <option key={i} value={p}>{p}</option>)}
+                    </Select>
+                    <div className="flex gap-3 pt-5">
+                        <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
+                        <PrimaryButton onClick={()=>{
+                            if(newProdState.nume){
+                                FirebaseService.add('produse_magazin', {magazinId: magazin.id, categorie: newProdState.cat, nume: newProdState.nume});
+                                closeModal();
+                            } else { alert("Alege un produs!"); }
+                        }}>Salvează</PrimaryButton>
+                    </div>
+                </BaseModal>
+
+                <BaseModal isOpen={modal.type === MODAL_TYPES.EDIT_STORE} title="Editează Magazin">
+                    <Input placeholder="Nume" value={editStore.nume} onChange={e=>setEditStore({...editStore, nume:e.target.value})} />
+                    <Input placeholder="Adresă" value={editStore.adresa} onChange={e=>setEditStore({...editStore, adresa:e.target.value})} />
+                    <div className="mt-2 text-[0.85rem] font-bold text-text-sec ml-1">Rețea:</div>
+                    <Select value={editStore.retea} onChange={e=>setEditStore({...editStore, retea:e.target.value})} className="!mt-0">
+                        {reteleMagazine.map((r,i) => <option key={i} value={r.nume}>{r.nume}</option>)}
+                    </Select>
+                    <div className="mt-2 text-[0.85rem] font-bold text-text-sec ml-1">Sector (Mutare):</div>
+                    <Select value={editStore.sectorId} onChange={e=>setEditStore({...editStore, sectorId:e.target.value})} className="!mt-0">
+                        {allSectoare.map(s => <option key={s.id} value={s.id}>{s.nume}</option>)}
+                    </Select>
+                    <div className="flex gap-3 pt-5">
+                        <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
+                        <PrimaryButton onClick={()=>{
+                            if(editStore.nume){
+                                let objRet = reteleMagazine.find(r=>r.nume===editStore.retea);
+                                let cul = objRet ? objRet.culoare : CONFIG.COLORS.DEFAULT_STORE;
+                                FirebaseService.update('magazine', magazin.id, { nume: editStore.nume, adresa: editStore.adresa, retea: editStore.retea, sectorId: editStore.sectorId, culoare: cul });
+                                
+                                if(editStore.sectorId !== magazin.sectorId) setView({page: PAGES.SECTOR, data: sector}); 
+                                else setView({page: PAGES.STORE, data: { magazin: {...magazin, nume: editStore.nume, adresa: editStore.adresa, retea: editStore.retea, culoare: cul}, sector }});
+                                closeModal();
+                            }
+                        }}>Salvează</PrimaryButton>
+                    </div>
+                </BaseModal>
+            </div>
+        );
+    };
+
+    // --- SUB-COMPONENTA PENTRU RENDERING LOTURI (Previne deplasarea cursorului) ---
+    const LotRow = ({ l, isDrojdii, catObj, confirmAction, onUpdate }) => {
+        const [cantitate, setCantitate] = useState(l.cantitate || 0);
+        const [dataExp, setDataExp] = useState(l.dataExp || '');
+        const [dataProd, setDataProd] = useState(l.dataProd || '');
+
+        useEffect(() => { setCantitate(l.cantitate || 0); }, [l.cantitate]);
+        useEffect(() => { setDataExp(l.dataExp || ''); }, [l.dataExp]);
+        useEffect(() => { setDataProd(l.dataProd || ''); }, [l.dataProd]);
+
+        const handleQtyBlur = () => {
+            FirebaseService.update('loturi', l.id, { cantitate: parseInt(cantitate) || 0 });
+            onUpdate();
+        };
+
+        const handleExpBlur = () => {
+            if (Helpers.convertDataToTime(dataExp) < 8000000000000000) {
+                FirebaseService.update('loturi', l.id, { dataExp });
+                onUpdate();
+            } else {
+                alert("Invalid: ZZ.LL.AAAA");
+                setDataExp(l.dataExp);
+            }
+        };
+
+        const handleProdBlur = () => {
+            let expCalc = Helpers.calculeazaExpirare(dataProd, catObj);
+            if (expCalc !== "Dată invalidă") {
+                FirebaseService.update('loturi', l.id, { dataProd, dataExp: expCalc });
+                onUpdate();
+            } else {
+                alert("Invalid: ZZ.LL.AAAA");
+                setDataProd(l.dataProd);
+            }
+        };
+
+        return (
+            <div className="flex justify-between items-center bg-bg-color dark:bg-dark-bg p-3 rounded-xl mt-3 border border-border-color dark:border-dark-border shadow-sm">
+                <div className="flex flex-col items-center">
+                    <span className="text-[0.75rem] font-bold text-text-sec uppercase">Buc</span>
+                    <input type="number" min="0" value={cantitate} onChange={e => setCantitate(Math.max(0, parseInt(e.target.value)||0))} onBlur={handleQtyBlur} className="w-[55px] text-center p-1 mt-1 font-black text-[1.1rem] border border-border-color dark:border-dark-border rounded-lg bg-surface-color dark:bg-dark-surface text-text-main dark:text-white" />
+                </div>
+                {/* S-a mărit dimensiunea chenarului la w-[130px] ca să nu taie nicio cifră */}
+                <div className="flex flex-col items-center px-2">
+                    <span className="text-[0.75rem] font-bold text-text-sec uppercase">Expiră pe</span>
+                    {isDrojdii ? (
+                        <input type="text" value={dataExp} onChange={e => setDataExp(e.target.value)} onBlur={handleExpBlur} className="text-danger font-black w-[130px] text-center p-1 mt-1 border border-border-color dark:border-dark-border rounded-lg bg-surface-color dark:bg-dark-surface outline-none focus:border-accent" />
+                    ) : (
+                        <strong className="text-danger font-black text-[1.1rem] mt-2">{dataExp}</strong>
+                    )}
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-[0.75rem] font-bold text-text-sec uppercase">Data Prod.</span>
+                    {isDrojdii ? (
+                        <span className="text-[0.9rem] font-bold text-border-color mt-2">N/A</span>
+                    ) : (
+                        <input type="text" value={dataProd} onChange={e => setDataProd(e.target.value)} onBlur={handleProdBlur} className="w-[130px] text-center p-1 mt-1 font-bold border border-border-color dark:border-dark-border rounded-lg bg-surface-color dark:bg-dark-surface text-text-main dark:text-white outline-none focus:border-accent" />
+                    )}
+                </div>
+                <ButtonDanger icon="fas fa-times-circle" className="!text-[1.4rem]" onClick={() => confirmAction("Șterge Lot", "Sigur?", () => { FirebaseService.delete('loturi', l.id); onUpdate(); })} />
+            </div>
+        );
+    };
+
+    const ProductPage = () => {
+        const { view, setView, catalogCategorii, dbMagazine, dbProduse, dbLoturi, confirmAction, modal, openModal, closeModal } = useApp();
+        
+        // Sincronizare perfectă a magazinului indiferent de unde este accesat produsul
+        const rawProd = view.data;
+        const prod = { ...rawProd, ...(dbProduse[rawProd.id] || {}) }; 
+        const activeMag = dbMagazine[prod.magazinId] || { nume: prod.magazinNume, adresa: prod.magazinAdresa, culoare: prod.magazinCuloare };
+
+        const isDrojdii = prod.categorie === 'Drojdii';
+        const catObj = catalogCategorii[prod.categorie];
+        
+        const loturiCurente = Object.values(dbLoturi).filter(l => l.produsId === prod.id).map(lot => {
+            let l = {...lot};
+            if(!isDrojdii) {
+                let expCalc = Helpers.calculeazaExpirare(l.dataProd, catObj);
+                if(l.dataExp !== expCalc && expCalc !== "Dată invalidă") {
+                    FirebaseService.update("loturi", l.id, { dataExp: expCalc }); l.dataExp = expCalc;
+                }
+            }
+            return l;
+        }).sort((a,b) => Helpers.convertDataToTime(a.dataExp) - Helpers.convertDataToTime(b.dataExp));
+
+        const totalVitrina = loturiCurente.reduce((sum, l) => sum + (parseInt(l.cantitate)||0), 0);
+        
+        const [stocMan, setStocMan] = useState(prod.stocManual || '');
+        useEffect(() => { setStocMan(prod.stocManual || ''); }, [prod.stocManual]);
+
+        const [depozit, setDepozit] = useState(prod.depozit || '');
+        useEffect(() => { setDepozit(prod.depozit || ''); }, [prod.depozit]);
+
+        const [notite, setNotite] = useState(prod.notite || '');
+        useEffect(() => { setNotite(prod.notite || ''); }, [prod.notite]);
+
+        const [newLot, setNewLot] = useState({ qty: '', data: '' });
+
+        // Indicator pentru ultima modificare efectuata
+        const [actualizatData, setActualizatData] = useState(() => new Date().toLocaleDateString('ro-RO'));
+        const triggerUpdate = () => {
+            const acum = new Date();
+            setActualizatData(acum.toLocaleDateString('ro-RO') + ' ' + acum.toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'}));
+        };
+        
+        return (
+            <div className="animate-fade-in pb-[100px]">
+                {/* Butoanele Inapoi si Acasa poziționate corect în dreapta antetului */}
+                <FrozenHeader title={prod.nume} subtitle={`${activeMag.nume} - ${activeMag.adresa}`} bgColor={activeMag.culoare || CONFIG.COLORS.DEFAULT_STORE} actions={
+                    <React.Fragment>
+                        <ButtonIcon icon="fas fa-arrow-left text-white" onClick={()=>setView({page: PAGES.STORE, data: prod.backData || { magazin: activeMag, sector: { id: activeMag.sectorId, nume: 'Sector' } }})}/>
+                        <ButtonIcon icon="fas fa-home text-white" onClick={()=>setView({page: PAGES.MAIN})}/>
+                    </React.Fragment>
+                } />
+                
+                <Card>
+                    <textarea 
+                        className="w-full p-4 border border-border-color dark:border-dark-border rounded-xl bg-bg-color dark:bg-dark-bg font-medium outline-none focus:border-accent text-text-main dark:text-white" 
+                        placeholder="Notițe de făcut..." rows="2"
+                        value={notite}
+                        onChange={(e) => setNotite(e.target.value)}
+                        onBlur={() => FirebaseService.update('produse_magazin', prod.id, { notite })}
+                    ></textarea>
+                </Card>
+
+                <Card>
+                    <div className="font-black text-[1.2rem] mb-2">Cantitatea</div>
+                    <CardRow className="!py-1">
+                        <span className="font-bold">Depozit:</span> 
+                        {/* Permite acum text liber */}
+                        <Input 
+                            type="text" 
+                            className="!w-[50%] !m-0 !p-2 !text-center font-bold text-text-main dark:text-white" 
+                            value={depozit}
+                            onChange={e=>setDepozit(e.target.value)}
+                            onBlur={()=>FirebaseService.update('produse_magazin', prod.id, { depozit })}
+                        />
+                    </CardRow>
+                    <div className="grid grid-cols-2 gap-3 mt-4">
+                        <div className="bg-bg-color dark:bg-dark-bg p-3 rounded-xl text-center border border-border-color dark:border-dark-border shadow-sm">
+                            <span className="block text-[0.8rem] font-bold text-text-sec uppercase tracking-wide mb-1">Vitrină (Sumă)</span>
+                            <div className="text-[1.8rem] font-black text-accent">{totalVitrina}</div>
+                        </div>
+                        <div className="bg-bg-color dark:bg-dark-bg p-3 rounded-xl text-center border border-border-color dark:border-dark-border shadow-sm">
+                            <span className="block text-[0.8rem] font-bold text-text-sec uppercase tracking-wide mb-1">Stoc (Manual)</span>
+                            <div className="flex items-center justify-center gap-1 mt-1">
+                                {/* Permite text liber */}
+                                <input type="text" placeholder="Notă stoc..." className="w-[60%] text-center border-none bg-transparent font-black text-[1.1rem] text-text-main dark:text-white outline-none" value={stocMan} onChange={e=>setStocMan(e.target.value)} onBlur={()=>FirebaseService.update('produse_magazin', prod.id, { stocManual: stocMan })} />
+                                <button onClick={()=>{if(stocMan)alert(`Salvat! Stoc: ${stocMan}`);}} className="text-white bg-[#0088cc] rounded-lg p-[8px_12px] shadow-md"><i className="fas fa-paper-plane"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card>
+                    <div className="flex justify-between items-center font-black text-[1.2rem] mb-2">
+                        Loturi Valabilitate
+                        <div className="flex items-center gap-2">
+                            <span className="text-[0.75rem] font-bold text-text-sec bg-gray-100 dark:bg-gray-800 p-1.5 rounded-lg">Actualizat - {actualizatData}</span>
+                            <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-100 dark:!bg-blue-900/50 !rounded-full !p-[6px_8px] !text-[1rem]" onClick={() => { setNewLot({qty: '', data: ''}); openModal(MODAL_TYPES.ADD_LOT); }} />
+                        </div>
+                    </div>
+                    <div>
+                        {loturiCurente.map(l => (
+                            <LotRow key={l.id} l={l} isDrojdii={isDrojdii} catObj={catObj} confirmAction={confirmAction} onUpdate={triggerUpdate} />
+                        ))}
+                    </div>
+                </Card>
+
+                <BaseModal isOpen={modal.type === MODAL_TYPES.ADD_LOT} title="Adaugă Lot Nou">
+                    <Input type="number" min="0" placeholder="Cantitate (opțional)" value={newLot.qty} onChange={e=>setNewLot({...newLot, qty:e.target.value})} />
+                    <div className="flex gap-[10px] items-center mt-2 relative w-full">
+                        <Input placeholder="Data (ZZ.LL.AAAA)" value={newLot.data} onChange={e=>setNewLot({...newLot, data:e.target.value})} />
+                        {/* Label-ul ascunde inputul nativ și scoate literele, lăsând doar pictograma calendarului */}
+                        <label className="flex items-center justify-center p-3 border border-border-color dark:border-dark-border rounded-xl bg-bg-color dark:bg-dark-bg text-accent h-[50px] mt-1 cursor-pointer min-w-[50px]">
+                            <i className="fas fa-calendar-alt text-xl"></i>
+                            <input type="date" className="hidden" onChange={e=>{
+                                if(!e.target.value) return; let d=new Date(e.target.value); setNewLot({...newLot, data: `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`});
+                            }} />
+                        </label>
+                    </div>
+                    <div className={`text-[0.85rem] mt-2 text-center font-bold ${isDrojdii ? 'text-danger' : 'text-text-sec'}`}>
+                        {isDrojdii ? 'Se cere Data Expirării (ZZ.LL.AAAA)' : 'Se cere Data Prod. (ZZ.LL.AAAA)'}
+                    </div>
+                    <div className="flex gap-3 pt-5">
+                        <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
+                        <PrimaryButton onClick={()=>{
+                            if(newLot.data) {
+                                let valQ = parseInt(newLot.qty); if(isNaN(valQ) || valQ < 0) valQ = 0;
+                                let expStr = isDrojdii ? newLot.data : Helpers.calculeazaExpirare(newLot.data, catObj);
+                                let prodStr = isDrojdii ? "N/A" : newLot.data;
+                                FirebaseService.add('loturi', {produsId: prod.id, cantitate: valQ, dataProd: prodStr, dataExp: expStr});
+                                triggerUpdate();
+                                closeModal();
+                            } else { alert('Introduceți măcar data!'); }
+                        }}>Salvează</PrimaryButton>
+                    </div>
+                </BaseModal>
+            </div>
+        );
+    };
+
+    // ==========================================
+    // 8. MAIN APP
+    // ==========================================
+    const MainApp = () => {
+        const { isReady, view, modal, closeModal, reteleMagazine, updateRetele } = useApp();
+        const [editRetState, setEditRetState] = useState({ nume: '', culoare: '' });
+        
+        useEffect(() => {
+            if (modal.type === MODAL_TYPES.EDIT_RET && modal.data) {
+                setEditRetState({ nume: modal.data.nume, culoare: modal.data.culoare });
+            }
+        }, [modal]);
+
+        return (
+            <React.Fragment>
+                {!isReady && (
+                    <div className="fixed inset-0 bg-bg-color dark:bg-dark-bg z-[9999] flex flex-col items-center justify-center transition-opacity duration-300">
+                        <img src="https://cdn-icons-png.flaticon.com/512/1356/1356559.png" alt="Liada Logo" className="w-[120px] h-[120px] animate-pulse-fast mb-5 drop-shadow-lg" />
+                        <h1 className="font-[900] text-[#ff3b30] text-[2.2rem] m-0 tracking-[2px]">LIADA</h1>
+                    </div>
+                )}
+                
+                {view.page === PAGES.MAIN && <MainPage />}
+                {view.page === PAGES.SETTINGS && <SettingsPage />}
+                {view.page === PAGES.SECTOR && <SectorPage />}
+                {view.page === PAGES.STORE && <StorePage />}
+                {view.page === PAGES.PRODUCT && <ProductPage />}
+
+                {/* GLOBAL MODALS (Prompt, Confirm, Editare globală rețea) */}
+                <BaseModal isOpen={modal.type === MODAL_TYPES.EDIT_RET} title="Editează Rețea">
+                    <Input placeholder="Nume" value={editRetState.nume} onChange={e=>setEditRetState({...editRetState, nume:e.target.value})} />
+                    <Input type="color" value={editRetState.culoare} onChange={e=>setEditRetState({...editRetState, culoare:e.target.value})} className="!h-[50px] !p-[3px] cursor-pointer" />
+                    <div className="flex gap-3 pt-5">
+                        <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
+                        <PrimaryButton onClick={()=>{
+                            if(editRetState.nume){
+                                let nr = [...reteleMagazine];
+                                nr[modal.data.index] = { nume: editRetState.nume, culoare: editRetState.culoare };
+                                updateRetele(nr);
+                                
+                                db.collection('magazine').where('retea', '==', modal.data.oldName).get().then(snap => {
+                                    let updates = []; snap.forEach(doc => updates.push({id: doc.id, data: { retea: editRetState.nume, culoare: editRetState.culoare }}));
+                                    FirebaseService.batchUpdate('magazine', updates);
+                                });
+                                closeModal();
+                            }
+                        }}>Salvează</PrimaryButton>
+                    </div>
+                </BaseModal>
+
+                <BaseModal isOpen={modal.type === MODAL_TYPES.CONFIRM} title={modal.data?.title}>
+                    <p className="text-text-main dark:text-white font-medium text-[1.1rem] mb-5 mt-0">{modal.data?.msg}</p>
+                    <div className="flex gap-3">
+                        <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
+                        <DangerButton onClick={()=>{if(modal.data?.onConfirm)modal.data.onConfirm(); closeModal();}}>Șterge</DangerButton>
+                    </div>
+                </BaseModal>
+
+                <BaseModal isOpen={modal.type === MODAL_TYPES.PROMPT} title={modal.data?.title}>
+                    <Input placeholder={modal.data?.placeholder} defaultValue={modal.data?.val} id="prompt-input" autoFocus />
+                    <div className="flex gap-3 pt-5">
+                        <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
+                        <PrimaryButton onClick={()=>{
+                            let val = document.getElementById('prompt-input').value.trim();
+                            if(modal.data?.onSave) modal.data.onSave(val); 
+                            closeModal();
+                        }}>Salvează</PrimaryButton>
+                    </div>
+                </BaseModal>
+            </React.Fragment>
+        );
+    };
+
+    // ==========================================
+    // 9. REACT DOM RENDER
+    // ==========================================
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<AppProvider><MainApp /></AppProvider>);
 </script>
 
 <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js')
-                .then(reg => console.log('Service Worker Liada înregistrat cu succes!'))
-                .catch(err => console.log('Eroare Service Worker:', err));
+            navigator.serviceWorker.register('./sw.js').catch(err => console.log('Eroare SW:', err));
         });
     }
 </script>
