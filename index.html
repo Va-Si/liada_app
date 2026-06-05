@@ -338,22 +338,43 @@
         }, []);
 
         const gSignIn = async () => {
-            try {
-                const provider = new firebase.auth.GoogleAuthProvider();
-                provider.addScope('https://www.googleapis.com/auth/spreadsheets');
-                const result = await firebase.auth().signInWithPopup(provider);
-                const credential = result.credential;
-                if (credential && credential.accessToken) {
-                    setGToken(credential.accessToken);
-                    localStorage.setItem('g_access_token', credential.accessToken);
-                    return credential.accessToken;
-                }
-                return null;
-            } catch (err) {
-                console.error("Autentificare Google eșuată:", err);
-                throw err;
-            }
-        };
+    try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        provider.addScope('https://www.googleapis.com/auth/spreadsheets');
+        
+        // Forțăm selectarea contului pentru a evita blocajele de cache
+        provider.setCustomParameters({ prompt: 'select_account' });
+
+        const result = await firebase.auth().signInWithPopup(provider);
+        
+        // Modul corect de extragere a token-ului în Firebase v8/Compat:
+        const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+        const token = credential ? credential.accessToken : null;
+
+        if (token) {
+            setGToken(token);
+            localStorage.setItem('g_access_token', token);
+            return token;
+        } else {
+            alert("Nu s-a putut obține permisiunea pentru Google Sheets.");
+            return null;
+        }
+    } catch (err) {
+        console.error("Autentificare Google eșuată:", err);
+        
+        // Alerte specifice care te vor ajuta să depistezi exact problema dacă fereastra tot nu se deschide
+        if (err.code === 'auth/operation-not-supported-in-this-environment') {
+            alert("Eroare: Autentificarea Google nu funcționează dacă deschizi fișierul direct (file://). Folosește un server local (ex: extensia Live Server din VS Code).");
+        } else if (err.code === 'auth/provider-not-enabled') {
+            alert("Eroare: Autentificarea cu Google nu este activată! Mergi în Firebase Console -> Authentication -> Sign-in method și activează 'Google'.");
+        } else if (err.code === 'auth/popup-blocked') {
+            alert("Eroare: Browser-ul a blocat fereastra pop-up. Te rog să permiți pop-up-urile pentru acest site.");
+        } else {
+            alert("Eroare la conectare: " + err.message);
+        }
+        throw err;
+    }
+};
 
         const gSignOut = async () => {
             try {
@@ -2211,18 +2232,20 @@
         const [isSyncing, setIsSyncing] = useState(false);
 
         const saveStockToGoogleSheets = async () => {
-            if (!stocMan) {
-                alert("Introduceți o cifră validă la stoc manual înainte de a trimite.");
-                return;
-            }
+    // Permitem valoarea 0 explicit
+    if (stocMan === '' || stocMan === null || stocMan === undefined) {
+        alert("Introduceți o cifră validă la stoc manual înainte de a trimite.");
+        return;
+    }
 
-            if (!googleSpreadsheetId) {
-                alert("ID-ul documentului Google Sheets nu este configurat. Vă rugăm să îl adăugați mai întâi în ecranul de Setări.");
-                return;
-            }
-
-            let token = gToken;
-            if (!token) {
+    if (!googleSpreadsheetId) {
+        alert("ID-ul documentului Google Sheets nu este configurat. Vă rugăm să îl adăugați mai întâi în ecranul de Setări.");
+        return;
+    }
+    
+    // ... restul codului funcției tale rămâne exact la fel în jos
+    let token = gToken;
+    if (!token) {
                 const confirmed = window.confirm("Pentru a înscrie stocul în Google Sheets, trebuie să te autentifici mai întâi cu contul tău Google. Dorești să te autentifici acum?");
                 if (!confirmed) return;
                 try {
