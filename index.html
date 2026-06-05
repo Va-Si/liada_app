@@ -39,6 +39,8 @@
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
         input[type="color"]::-webkit-color-swatch { border: none; border-radius: 8px; }
         .sortable-ghost { opacity: 0.4; transform: scale(0.98); }
+        .cursor-grab { cursor: -webkit-grab; cursor: grab; }
+        .cursor-grab:active { cursor: -webkit-grabbing; cursor: grabbing; }
     </style>
 </head>
 <body class="bg-bg-color dark:bg-dark-bg text-text-main dark:text-dark-text-main transition-colors duration-300 m-0">
@@ -73,6 +75,85 @@
             const batch = db.batch();
             updates.forEach(u => batch.update(db.collection(collection).doc(u.id), u.data));
             return batch.commit();
+        },
+        deleteSectorCascading: async (sectorId) => {
+            const batch = db.batch();
+            batch.delete(db.collection('sectoare').doc(sectorId));
+            try {
+                const magazineSnap = await db.collection('magazine').where('sectorId', '==', sectorId).get();
+                const magIds = [];
+                magazineSnap.forEach(doc => {
+                    batch.delete(doc.ref);
+                    magIds.push(doc.id);
+                });
+                if (magIds.length > 0) {
+                    const productsSnap = await db.collection('produse_magazin').get();
+                    const prodIds = [];
+                    productsSnap.forEach(doc => {
+                        const data = doc.data();
+                        if (magIds.includes(data.magazinId)) {
+                            batch.delete(doc.ref);
+                            prodIds.push(doc.id);
+                        }
+                    });
+                    if (prodIds.length > 0) {
+                        const loturiSnap = await db.collection('loturi').get();
+                        loturiSnap.forEach(doc => {
+                            const data = doc.data();
+                            if (prodIds.includes(data.produsId)) {
+                                batch.delete(doc.ref);
+                            }
+                        });
+                    }
+                }
+                await batch.commit();
+            } catch (err) {
+                console.error("Cascading deletion failed:", err);
+                await db.collection('sectoare').doc(sectorId).delete();
+            }
+        },
+        deleteStoreCascading: async (storeId) => {
+            const batch = db.batch();
+            batch.delete(db.collection('magazine').doc(storeId));
+            try {
+                const productsSnap = await db.collection('produse_magazin').where('magazinId', '==', storeId).get();
+                const prodIds = [];
+                productsSnap.forEach(doc => {
+                    batch.delete(doc.ref);
+                    prodIds.push(doc.id);
+                });
+                if (prodIds.length > 0) {
+                    const loturiSnap = await db.collection('loturi').get();
+                    loturiSnap.forEach(doc => {
+                        const data = doc.data();
+                        if (prodIds.includes(data.produsId)) {
+                            batch.delete(doc.ref);
+                        }
+                    });
+                }
+                const pozeSnap = await db.collection('poze_magazine').where('magazinId', '==', storeId).get();
+                pozeSnap.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+            } catch (err) {
+                console.error("Store cascading deletion failed:", err);
+                await db.collection('magazine').doc(storeId).delete();
+            }
+        },
+        deleteProductCascading: async (productId) => {
+            const batch = db.batch();
+            batch.delete(db.collection('produse_magazin').doc(productId));
+            try {
+                const loturiSnap = await db.collection('loturi').where('produsId', '==', productId).get();
+                loturiSnap.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+            } catch (err) {
+                console.error("Product cascading deletion failed:", err);
+                await db.collection('produse_magazin').doc(productId).delete();
+            }
         }
     };
 
@@ -82,11 +163,12 @@
     const PAGES = { MAIN: 'main', SETTINGS: 'settings', SECTOR: 'sector', STORE: 'store', PRODUCT: 'product' };
     
     const MODAL_TYPES = {
-        CONFIRM: 'confirm', PROMPT: 'prompt',
+        CONFIRM: 'confirm', PROMPT: 'prompt', SEARCH: 'search', ALERT: 'alert',
         ADD_SECTOR: 'add_sector', EDIT_SECTOR: 'edit_sector',
         ADD_STORE: 'add_store', EDIT_STORE: 'edit_store',
         ADD_PRODUCT: 'add_product', ADD_LOT: 'add_lot',
-        ADD_RET: 'add_ret', EDIT_RET: 'edit_ret', ADD_PROP: 'add_prop'
+        ADD_RET: 'add_ret', EDIT_RET: 'edit_ret', ADD_PROP: 'add_prop',
+        PRODUCT_IMAGE: 'product_image'
     };
 
     const PREFERRED_CAT_ORDER = [
@@ -146,15 +228,26 @@
             });
         },
         initSortable: (container, dataRef, collectionName) => {
+            let originalNextSibling = null;
             return new Sortable(container, {
                 animation: 150, delay: 200, delayOnTouchOnly: true, touchStartThreshold: 5, ghostClass: 'sortable-ghost',
+                onStart: (evt) => {
+                    originalNextSibling = evt.item.nextSibling;
+                },
                 onEnd: (evt) => {
-                    const newOrder = [...dataRef.current];
-                    if (evt.oldIndex !== undefined && evt.newIndex !== undefined) {
-                      const moved = newOrder.splice(evt.oldIndex, 1)[0];
-                      newOrder.splice(evt.newIndex, 0, moved);
-                      const updates = newOrder.map((item, idx) => ({ id: item.id, data: { order: idx } }));
-                      FirebaseService.batchUpdate(collectionName, updates);
+                    if (evt.oldIndex !== undefined && evt.newIndex !== undefined && evt.oldIndex !== evt.newIndex) {
+                        // Revert standard DOM change so React can handle the rendering correctly
+                        if (originalNextSibling) {
+                            evt.from.insertBefore(evt.item, originalNextSibling);
+                        } else {
+                            evt.from.appendChild(evt.item);
+                        }
+
+                        const newOrder = [...dataRef.current];
+                        const moved = newOrder.splice(evt.oldIndex, 1)[0];
+                        newOrder.splice(evt.newIndex, 0, moved);
+                        const updates = newOrder.map((item, idx) => ({ id: item.id, data: { order: idx } }));
+                        FirebaseService.batchUpdate(collectionName, updates);
                     }
                 }
             });
@@ -178,6 +271,7 @@
     const CardRow = ({ children, className = "", onClick }) => <div onClick={onClick} className={`flex justify-between items-center py-2.5 border-b border-border-color dark:border-dark-border last:border-b-0 ${onClick ? 'cursor-pointer' : ''} ${className}`}>{children}</div>;
 
     const FAB = ({ onClick }) => <button onClick={onClick} className="fixed bottom-[30px] right-[30px] w-[64px] h-[64px] rounded-full bg-surface-color/90 dark:bg-dark-surface/90 backdrop-blur-md text-accent border border-border-color dark:border-dark-border text-[1.8rem] shadow-lg cursor-pointer z-[99] flex justify-center items-center hover:scale-105 transition-transform"><i className="fas fa-plus"></i></button>;
+    const FABSearch = ({ onClick }) => <button onClick={onClick} className="fixed bottom-[30px] left-[30px] w-[64px] h-[64px] rounded-full bg-surface-color/90 dark:bg-dark-surface/90 backdrop-blur-md text-accent border border-border-color dark:border-dark-border text-[1.8rem] shadow-lg cursor-pointer z-[99] flex justify-center items-center hover:scale-105 transition-transform"><i className="fas fa-search"></i></button>;
 
     const FrozenHeader = ({ title, subtitle, bgColor, actions, nav }) => (
         <div className="sticky top-2.5 mx-4 my-2.5 p-[15px_20px] rounded-[25px] flex flex-col gap-2 z-[100] shadow-lg text-white backdrop-blur-md" style={{ backgroundColor: bgColor }}>
@@ -414,10 +508,18 @@
                                 <div className="mb-2 cursor-pointer font-black text-[1.05rem]" onClick={() => setView({page: PAGES.PRODUCT, data: { id: item.prod.id, nume: item.prod.nume, categorie: item.prod.categorie, magazinCuloare: item.mag.culoare, magazinNume: item.mag.nume, magazinAdresa: item.mag.adresa, backData: {magazin: item.mag, sector: item.sec} }})}>
                                     {item.prod.nume} <span className="text-text-sec font-medium text-[0.9rem]">({item.lot.cantitate} buc)</span>
                                 </div>
-                                <div className="text-[0.9rem] mb-3 font-medium text-danger">
-                                    {item.zile < 0 ? <span>A expirat de {Math.abs(item.zile)} zile</span> : 
-                                     item.zile === 0 ? <span>Expiră ASTĂZI</span> : 
-                                     <span>Va expira în {item.zile} zile</span>}
+                                <div className="text-[0.9rem] mb-3 font-medium">
+                                    {item.zile < 0 ? (
+                                        <span className="text-text-main dark:text-white">
+                                            A expirat de <span className="text-danger font-black">{Math.abs(item.zile)} zile</span>
+                                        </span>
+                                    ) : item.zile === 0 ? (
+                                        <span className="text-danger font-black animate-pulse">Expiră ASTĂZI</span>
+                                    ) : (
+                                        <span className="text-text-main dark:text-white">
+                                            Va expira în <span className="text-danger font-black">{item.zile} zile</span>
+                                        </span>
+                                    )}
                                 </div>
                                 {(type === 'global' || type === 'sector') && (
                                     <div className="flex flex-wrap gap-2 mt-2">
@@ -476,13 +578,14 @@
                         <Card key={s.id} onClick={() => setView({page: PAGES.SECTOR, data: s})} className="text-white !p-0 overflow-hidden !rounded-[25px] !shadow-md transition-transform" style={{backgroundColor: s.culoare || CONFIG.COLORS.DEFAULT_SECTOR}}>
                             <div className="flex justify-between items-center p-[20px] font-black text-[1.2rem]">
                                 {s.nume}
-                                <ButtonIcon icon="fas fa-trash text-white" onClick={(e) => { e.stopPropagation(); confirmAction("Ștergere", "Ștergi sectorul?", () => FirebaseService.delete('sectoare', s.id)); }} />
+                                <ButtonIcon icon="fas fa-trash text-white" onClick={(e) => { e.stopPropagation(); confirmAction("Ștergere", "Ștergi sectorul, inclusiv toate magazinele și produsele sale?", () => FirebaseService.deleteSectorCascading(s.id)); }} />
                             </div>
                         </Card>
                     ))}
                 </div>
 
                 <ExpirariBox type="global" />
+                <FABSearch onClick={() => openModal(MODAL_TYPES.SEARCH)} />
                 <FAB onClick={() => { setNewSect({ nume: '', culoare: CONFIG.COLORS.DEFAULT_SECTOR }); openModal(MODAL_TYPES.ADD_SECTOR); }} />
 
                 <BaseModal isOpen={modal.type === MODAL_TYPES.ADD_SECTOR} title="Adaugă Sector">
@@ -497,38 +600,571 @@
         );
     };
 
+    // Componente auxiliare pentru gestionarea și afișarea imaginii produsului / codurilor de bare
+    const ProductImageModalContent = ({ catName, prodName, closeModal }) => {
+        const [imageUrl, setImageUrl] = useState('');
+        const [loading, setLoading] = useState(true);
+        const [saving, setSaving] = useState(false);
+        const [dragActive, setDragActive] = useState(false);
+        const docId = `${catName}___${prodName}`;
+
+        useEffect(() => {
+            const unsubscribe = db.collection('imagini_produse').doc(docId).onSnapshot(doc => {
+                if (doc.exists) {
+                    setImageUrl(doc.data().image || '');
+                } else {
+                    setImageUrl('');
+                }
+                setLoading(false);
+            }, err => {
+                console.error("Eroare la citirea imaginii produsului:", err);
+                setLoading(false);
+            });
+            return () => unsubscribe();
+        }, [docId]);
+
+        const handleFileSelect = (file) => {
+            if (!file) return;
+            setSaving(true);
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    const MAX_SIZE = 800; // Calitate excelentă a imaginii, dar redimensionată sub limita de 1MB a documentului Firestore
+                    if (width > height) {
+                        if (width > MAX_SIZE) {
+                            height *= MAX_SIZE / width;
+                            width = MAX_SIZE;
+                        }
+                    } else {
+                        if (height > MAX_SIZE) {
+                            width *= MAX_SIZE / height;
+                            height = MAX_SIZE;
+                        }
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+                    db.collection('imagini_produse').doc(docId).set({
+                        image: compressedDataUrl,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true })
+                    .then(() => {
+                        setSaving(false);
+                    })
+                    .catch(err => {
+                        console.error("Eroare salvare image:", err);
+                        setSaving(false);
+                        alert("Eroare salvare: " + err.message);
+                    });
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        const handleDrag = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.type === "dragenter" || e.type === "dragover") {
+                setDragActive(true);
+            } else if (e.type === "dragleave") {
+                setDragActive(false);
+            }
+        };
+
+        const handleDrop = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragActive(false);
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                handleFileSelect(e.dataTransfer.files[0]);
+            }
+        };
+
+        const deleteImage = () => {
+            if (confirm("Sigur dorești să ștergi imaginea asociată acestui produs?")) {
+                setSaving(true);
+                db.collection('imagini_produse').doc(docId).delete()
+                    .then(() => {
+                        setImageUrl('');
+                        setSaving(false);
+                    })
+                    .catch(e => {
+                        console.error(e);
+                        setSaving(false);
+                    });
+            }
+        };
+
+        return (
+            <div className="p-1">
+                <div className="mb-4 text-center">
+                    <span className="block text-[0.8rem] font-bold text-text-sec uppercase tracking-wider">{catName}</span>
+                    <h3 className="text-[1.25rem] font-black text-text-main dark:text-white mt-1">{prodName}</h3>
+                </div>
+
+                {loading ? (
+                    <div className="flex flex-col items-center justify-center py-10">
+                        <i className="fas fa-spinner animate-spin text-accent text-[2.2rem] mb-3"></i>
+                        <span className="text-text-sec font-medium text-[0.85rem]">Se încarcă imaginea...</span>
+                    </div>
+                ) : imageUrl ? (
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="relative w-full max-h-[300px] overflow-hidden rounded-xl border border-border-color dark:border-dark-border bg-gray-50 dark:bg-gray-900/20 flex items-center justify-center p-2">
+                            <img src={imageUrl} alt={prodName} className="max-w-full max-h-[280px] object-contain rounded-lg shadow-sm" />
+                            {saving && (
+                                <div className="absolute inset-0 bg-white/70 dark:bg-black/70 flex items-center justify-center rounded-xl">
+                                    <i className="fas fa-spinner animate-spin text-accent text-[1.8rem]"></i>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="flex gap-2.5 w-full">
+                            <button 
+                                onClick={() => document.getElementById('prod_img_file').click()}
+                                className="flex-1 bg-blue-50 dark:bg-blue-900/30 text-accent font-bold rounded-xl p-3 text-[0.85rem] uppercase cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/55 transition-colors flex justify-center items-center gap-1.5"
+                            >
+                                <i className="fas fa-sync-alt"></i> Schimbă imaginea
+                            </button>
+                            <button 
+                                onClick={deleteImage}
+                                className="bg-red-50 dark:bg-red-900/25 text-danger font-bold rounded-xl p-3 text-[0.85rem] uppercase cursor-pointer hover:bg-red-100 transition-colors flex justify-center items-center px-4"
+                                title="Șterge imagine"
+                            >
+                                <i className="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div 
+                        onDragEnter={handleDrag} 
+                        onDragOver={handleDrag} 
+                        onDragLeave={handleDrag} 
+                        onDrop={handleDrop}
+                        onClick={() => document.getElementById('prod_img_file').click()}
+                        className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[180px] ${
+                            dragActive 
+                            ? 'border-accent bg-blue-50/50 dark:bg-blue-900/20 scale-[0.98]' 
+                            : 'border-border-color dark:border-dark-border hover:border-accent hover:bg-gray-50 dark:hover:bg-gray-900/10'
+                        }`}
+                    >
+                        {saving ? (
+                            <React.Fragment>
+                                <i className="fas fa-spinner animate-spin text-accent text-[2.2rem] mb-3"></i>
+                                <span className="font-bold text-[0.95rem] text-text-main dark:text-white">Se salvează...</span>
+                            </React.Fragment>
+                        ) : (
+                            <React.Fragment>
+                                <div className="w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-accent mb-3.5">
+                                    <i className="fas fa-camera text-[1.4rem]"></i>
+                                </div>
+                                <span className="font-black text-[0.9rem] text-text-main dark:text-white">Fă o poză sau alege un fișier</span>
+                                <span className="text-[0.8rem] text-text-sec mt-1.5 font-medium leading-relaxed max-w-[220px]">
+                                    Ideal pentru fotografierea codului de bare al produsului
+                                </span>
+                            </React.Fragment>
+                        )}
+                    </div>
+                )}
+                <input 
+                    type="file" 
+                    id="prod_img_file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={e => {
+                        if (e.target.files && e.target.files[0]) {
+                            handleFileSelect(e.target.files[0]);
+                        }
+                    }} 
+                />
+                
+                <div className="flex justify-end gap-3 pt-5 border-t border-dashed border-border-color dark:border-dark-border mt-4">
+                    <button 
+                        onClick={closeModal} 
+                        className="p-3 font-black text-text-sec uppercase text-[0.8rem] bg-gray-100 dark:bg-gray-800 rounded-xl hover:opacity-80 transition-colors w-full"
+                    >
+                        Închide
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    const ProductImageSection = ({ catName, prodName, openModal }) => {
+        const [imageUrl, setImageUrl] = useState('');
+        const [loading, setLoading] = useState(true);
+        const docId = `${catName}___${prodName}`;
+
+        useEffect(() => {
+            const unsubscribe = db.collection('imagini_produse').doc(docId).onSnapshot(doc => {
+                if (doc.exists) {
+                    setImageUrl(doc.data().image || '');
+                } else {
+                    setImageUrl('');
+                }
+                setLoading(false);
+            }, err => {
+                console.error("Eroare incarcare imagine in ProductImageSection:", err);
+                setLoading(false);
+            });
+            return () => unsubscribe();
+        }, [docId]);
+
+        return (
+            <Card className="!p-4 border border-border-color dark:border-dark-border shadow-sm">
+                <div className="flex justify-between items-center font-black text-[1.2rem] mb-2">
+                    <span className="flex items-center gap-2">
+                        <i className="fas fa-barcode text-accent"></i>
+                        Cod de Bare / Fotografie
+                    </span>
+                    <button 
+                        onClick={() => openModal(MODAL_TYPES.PRODUCT_IMAGE, { catName, prodName })}
+                        className="bg-blue-50 dark:bg-blue-900/30 text-accent font-bold p-[6px_14px] text-[0.8rem] rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors cursor-pointer"
+                    >
+                        {imageUrl ? 'Modifică' : 'Adaugă'}
+                    </button>
+                </div>
+
+                {loading ? (
+                    <div className="flex justify-center py-4">
+                        <i className="fas fa-spinner animate-spin text-accent text-[1.5rem]"></i>
+                    </div>
+                ) : imageUrl ? (
+                    <div className="flex justify-center items-center mt-3 bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
+                        <img 
+                            src={imageUrl} 
+                            alt={prodName} 
+                            className="max-h-[160px] max-w-full object-contain cursor-zoom-in rounded-lg shadow-sm"
+                            onClick={() => openModal(MODAL_TYPES.PRODUCT_IMAGE, { catName, prodName })}
+                        />
+                    </div>
+                ) : (
+                    <div 
+                        onClick={() => openModal(MODAL_TYPES.PRODUCT_IMAGE, { catName, prodName })}
+                        className="text-center font-semibold text-text-sec text-[0.85rem] mt-3 py-4 border border-dashed border-border-color dark:border-dark-border rounded-xl cursor-pointer hover:border-accent group"
+                    >
+                        <i className="fas fa-plus text-accent mr-1 text-[0.95rem]"></i> 
+                        <span className="group-hover:text-accent font-[800]">Încarcă codul de bare pentru scanare rapidă</span>
+                    </div>
+                )}
+            </Card>
+        );
+    };
+
+    const SettingsCategoryCard = ({ catName, catData, catalogCategorii, updateCatalog, promptAction, confirmAction }) => {
+        const { openModal } = useApp();
+        const isDrojdii = catName === 'Drojdii';
+        const productsContainerRef = useRef(null);
+
+        useEffect(() => {
+            if (productsContainerRef.current) {
+                let originalNextSibling = null;
+                const sortable = new Sortable(productsContainerRef.current, {
+                    animation: 150, delay: 200, delayOnTouchOnly: true, touchStartThreshold: 5, ghostClass: 'sortable-ghost',
+                    onStart: (evt) => {
+                        originalNextSibling = evt.item.nextSibling;
+                    },
+                    onEnd: (evt) => {
+                        if (evt.oldIndex !== undefined && evt.newIndex !== undefined && evt.oldIndex !== evt.newIndex) {
+                            // Revert standard DOM change so React can handle the rendering correctly
+                            if (originalNextSibling) {
+                                evt.from.insertBefore(evt.item, originalNextSibling);
+                            } else {
+                                evt.from.appendChild(evt.item);
+                            }
+
+                            let c = { ...catalogCategorii };
+                            let arr = [...c[catName].produse];
+                            const [moved] = arr.splice(evt.oldIndex, 1);
+                            arr.splice(evt.newIndex, 0, moved);
+                            c[catName].produse = arr;
+                            updateCatalog(c);
+                        }
+                    }
+                });
+                return () => sortable.destroy();
+            }
+        }, [catData.produse, catalogCategorii]);
+
+        return (
+            <Card key={catName} className="!m-[0_0_15px_0] border border-border-color dark:border-dark-border !shadow-none !p-3">
+                <div className="flex justify-between items-center mb-3 flex-wrap gap-2 cat-drag-handle cursor-grab">
+                    <div className="font-black flex items-center gap-2 text-[1.05rem]">
+                        <i className="fas fa-grip-lines text-text-sec opacity-30"></i>
+                        {catName} 
+                        <ButtonIcon icon="fas fa-pen" className="!text-accent !text-[0.9rem] !p-1" onClick={(e) => { 
+                            e.stopPropagation(); 
+                            const onRenameCategory = (newName) => {
+                                if(newName && newName !== catName){
+                                    const exists = Object.keys(catalogCategorii).some(c => c.trim().toLowerCase() === newName.trim().toLowerCase());
+                                    if(exists) {
+                                        openModal(MODAL_TYPES.ALERT, {
+                                            msg: `Categoria "${newName}" există deja. Vă rugăm să introduceți o denumire unică.`,
+                                            prevType: MODAL_TYPES.PROMPT,
+                                            prevData: { title: "Redenumește", val: newName, placeholder: "Nume", onSave: onRenameCategory }
+                                        });
+                                        return false;
+                                    }
+                                    let c={...catalogCategorii}; 
+                                    c[newName]=c[catName]; 
+                                    delete c[catName]; 
+                                    updateCatalog(c); 
+                                    db.collection("produse_magazin").where("categorie","==",catName).get().then(s=>{
+                                        let b=db.batch(); 
+                                        s.forEach(d=>b.update(d.ref,{categorie:newName})); 
+                                        b.commit();
+                                    });
+
+                                    // Mută imaginile produselor în noua categorie de documente
+                                    if (catData && catData.produse) {
+                                        catData.produse.forEach(p => {
+                                            const oldId = `${catName}___${p}`;
+                                            const newId = `${newName}___${p}`;
+                                            db.collection('imagini_produse').doc(oldId).get().then(doc => {
+                                                if (doc.exists) {
+                                                    const imgData = doc.data();
+                                                    db.collection('imagini_produse').doc(newId).set(imgData)
+                                                        .then(() => db.collection('imagini_produse').doc(oldId).delete().catch(err => console.error(err)))
+                                                        .catch(err => console.error(err));
+                                                }
+                                            }).catch(err => console.error(err));
+                                        });
+                                    }
+                                }
+                            };
+                            promptAction("Redenumește", catName, "Nume", onRenameCategory); 
+                        }}/>
+                    </div>
+                    <div className="flex gap-2 items-center bg-gray-100 dark:bg-gray-800 p-1.5 rounded-xl" onClick={e => e.stopPropagation()}>
+                        {!isDrojdii ? (
+                            <React.Fragment>
+                                <input type="number" min="0" value={catData.termen} onChange={e => { let c={...catalogCategorii}; let val=parseInt(e.target.value); if(isNaN(val)||val<0)val=0; c[catName].termen=val; updateCatalog(c); }} className="w-[50px] bg-transparent text-center font-bold outline-none font-medium text-text-main dark:text-white" />
+                                <select value={catData.unit} onChange={e => { let c={...catalogCategorii}; c[catName].unit=e.target.value; updateCatalog(c); }} className="bg-transparent font-bold outline-none cursor-pointer pr-1 text-text-main dark:text-white">
+                                    <option value="zile" className="dark:bg-[#1a1a1c]">Zile</option>
+                                    <option value="luni" className="dark:bg-[#1a1a1c]">Luni</option>
+                                </select>
+                            </React.Fragment>
+                        ) : <span className="text-[0.8rem] text-danger font-bold px-2">Exp. Manuală</span>}
+                    </div>
+                </div>
+                <div className="border-t border-dashed border-border-color dark:border-dark-border pt-2">
+                    <div ref={productsContainerRef}>
+                        {catData.produse.map((p, idx) => (
+                            <CardRow key={p} className="!p-[8px_5px] !text-[0.95rem] hover:bg-gray-100 dark:hover:bg-gray-900/25 rounded-lg pr-1">
+                                <span 
+                                    className="font-medium flex items-center cursor-pointer hover:text-accent select-none" 
+                                    title="Apasă pentru imagine / cod de bare"
+                                    onClick={() => openModal(MODAL_TYPES.PRODUCT_IMAGE, { catName, prodName: p })}
+                                >
+                                    <i className="fas fa-grip-lines text-text-sec opacity-20 mr-2 cursor-grab"></i>
+                                    <i className="fas fa-barcode text-accent/70 hover:text-accent mr-2 text-[0.85rem]" title="Foto / Cod Bare"></i>
+                                    {p}
+                                </span>
+                                <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                    <ButtonIcon icon="fas fa-pen" className="!text-accent !text-[0.9rem] !p-1" onClick={() => {
+                                        const onRenameProd = (newName) => {
+                                            if(newName && newName !== p){
+                                                const exists = catData.produse.some((item, i) => i !== idx && item.trim().toLowerCase() === newName.trim().toLowerCase());
+                                                if(exists) {
+                                                    openModal(MODAL_TYPES.ALERT, {
+                                                        msg: `Produsul "${newName}" există deja în categoria "${catName}". Vă rugăm să introduceți o denumire unică.`,
+                                                        prevType: MODAL_TYPES.PROMPT,
+                                                        prevData: { title: "Redenumește", val: newName, placeholder: "Nume", onSave: onRenameProd }
+                                                    });
+                                                    return false;
+                                                }
+                                                let c={...catalogCategorii}; 
+                                                c[catName].produse[idx]=newName; 
+                                                updateCatalog(c); 
+                                                db.collection("produse_magazin").where("categorie","==",catName).where("nume","==",p).get().then(s=>{
+                                                    let b=db.batch(); 
+                                                    s.forEach(d=>b.update(d.ref,{nume:newName})); 
+                                                    b.commit();
+                                                });
+
+                                                // Redenumește imaginea produsului dacă există
+                                                const oldId = `${catName}___${p}`;
+                                                const newId = `${catName}___${newName}`;
+                                                db.collection('imagini_produse').doc(oldId).get().then(doc => {
+                                                    if (doc.exists) {
+                                                        const imgData = doc.data();
+                                                        db.collection('imagini_produse').doc(newId).set(imgData)
+                                                            .then(() => db.collection('imagini_produse').doc(oldId).delete().catch(err => console.error(err)))
+                                                            .catch(err => console.error(err));
+                                                    }
+                                                }).catch(err => console.error(err));
+                                            }
+                                        };
+                                        promptAction("Redenumește", p, "Nume", onRenameProd);
+                                    }} />
+                                    <ButtonDanger icon="fas fa-trash" className="!text-[0.9rem] !p-1" onClick={() => confirmAction("Șterge", `Elimini ${p}?`, () => { 
+                                        let c={...catalogCategorii}; 
+                                        c[catName].produse.splice(idx,1); 
+                                        updateCatalog(c); 
+                                        db.collection('imagini_produse').doc(`${catName}___${p}`).delete().catch(err => console.error(err));
+                                    })} />
+                                </div>
+                            </CardRow>
+                        ))}
+                    </div>
+                    {catData.produse.length === 0 ? <div className="text-center text-text-sec text-[0.85rem] py-3">Nu există produse încă.</div> : null}
+                    <button onClick={() => {
+                        const onAddProdName = (n) => {
+                            if(n){
+                                const exists = catData.produse.some(p => p.trim().toLowerCase() === n.trim().toLowerCase());
+                                if(exists) {
+                                    openModal(MODAL_TYPES.ALERT, {
+                                        msg: `Produsul "${n}" există deja în categoria "${catName}". Vă rugăm să introduceți o denumire unică.`,
+                                        prevType: MODAL_TYPES.PROMPT,
+                                        prevData: { title: `Adaugă în ${catName}`, val: n, placeholder: "Nume produs", onSave: onAddProdName }
+                                    });
+                                    return false;
+                                }
+                                let c={...catalogCategorii}; 
+                                c[catName].produse.push(n); 
+                                updateCatalog(c);
+                            }
+                        };
+                        promptAction(`Adaugă în ${catName}`, "", "Nume produs", onAddProdName);
+                    }} className="bg-blue-50 dark:bg-blue-900/30 border-none text-accent font-bold rounded-xl p-3 mt-2 w-full text-center cursor-pointer"><i className="fas fa-plus mr-1"></i> Adaugă Produs</button>
+                </div>
+            </Card>
+        );
+    };
+
     const SettingsPage = () => {
         const { setView, theme, setTheme, reteleMagazine, updateRetele, proprietatiMagazine, updateProp, catalogCategorii, updateCatalog, promptAction, confirmAction, openModal, modal, closeModal } = useApp();
         const [newRet, setNewRet] = useState({ nume: '', culoare: CONFIG.COLORS.DEFAULT_SECTOR });
         const [newProp, setNewProp] = useState('');
 
-        // Sortăm categoriile conform standardului preferat cerut de client
+        const handleAddCategory = (n) => {
+            if(n) {
+                const exists = Object.keys(catalogCategorii).some(c => c.trim().toLowerCase() === n.trim().toLowerCase());
+                if(exists) {
+                    openModal(MODAL_TYPES.ALERT, {
+                        msg: `Categoria "${n}" există deja. Vă rugăm să introduceți o denumire unică.`,
+                        prevType: MODAL_TYPES.PROMPT,
+                        prevData: { title: "Categorie Nouă", val: n, placeholder: "Ex: Dulciuri", onSave: handleAddCategory }
+                    });
+                    return false;
+                }
+                updateCatalog({
+                    ...catalogCategorii, 
+                    [n]: { termen: 30, unit: 'zile', produse: [], order: Object.keys(catalogCategorii).length }
+                });
+            }
+        };
+
         const sortedCategories = useMemo(() => {
-            return Object.entries(catalogCategorii).sort(([catAName], [catBName]) => {
-                let indexA = PREFERRED_CAT_ORDER.indexOf(catAName);
-                let indexB = PREFERRED_CAT_ORDER.indexOf(catBName);
-                if (indexA === -1) indexA = 999;
-                if (indexB === -1) indexB = 999;
-                return indexA - indexB;
+            return Object.entries(catalogCategorii).sort(([catAName, catAData], [catBName, catBData]) => {
+                const orderA = catAData.order !== undefined ? catAData.order : PREFERRED_CAT_ORDER.indexOf(catAName);
+                const orderB = catBData.order !== undefined ? catBData.order : PREFERRED_CAT_ORDER.indexOf(catBName);
+                const valA = orderA === -1 ? 999 : orderA;
+                const valB = orderB === -1 ? 999 : orderB;
+                return valA - valB;
             });
         }, [catalogCategorii]);
 
-        // Schimbă ordinea produselor în interiorul categoriei în Setări
-        const moveProduct = (catName, index, direction) => {
-            let c = { ...catalogCategorii };
-            let arr = [...c[catName].produse];
-            if (direction === 'up' && index > 0) {
-                let temp = arr[index];
-                arr[index] = arr[index - 1];
-                arr[index - 1] = temp;
-            } else if (direction === 'down' && index < arr.length - 1) {
-                let temp = arr[index];
-                arr[index] = arr[index + 1];
-                arr[index + 1] = temp;
+        const networksContainerRef = useRef(null);
+        const propsContainerRef = useRef(null);
+        const categoriesContainerRef = useRef(null);
+
+        useEffect(() => {
+            if (networksContainerRef.current) {
+                let originalNextSibling = null;
+                const sortable = new Sortable(networksContainerRef.current, {
+                    animation: 150, delay: 200, delayOnTouchOnly: true, touchStartThreshold: 5, ghostClass: 'sortable-ghost',
+                    onStart: (evt) => {
+                        originalNextSibling = evt.item.nextSibling;
+                    },
+                    onEnd: (evt) => {
+                        if (evt.oldIndex !== undefined && evt.newIndex !== undefined && evt.oldIndex !== evt.newIndex) {
+                            // Revert standard DOM change so React can handle the rendering correctly
+                            if (originalNextSibling) {
+                                evt.from.insertBefore(evt.item, originalNextSibling);
+                            } else {
+                                evt.from.appendChild(evt.item);
+                            }
+
+                            let nr = [...reteleMagazine];
+                            const [moved] = nr.splice(evt.oldIndex, 1);
+                            nr.splice(evt.newIndex, 0, moved);
+                            updateRetele(nr);
+                        }
+                    }
+                });
+                return () => sortable.destroy();
             }
-            c[catName].produse = arr;
-            updateCatalog(c);
-        };
+        }, [reteleMagazine]);
+
+        useEffect(() => {
+            if (propsContainerRef.current) {
+                let originalNextSibling = null;
+                const sortable = new Sortable(propsContainerRef.current, {
+                    animation: 150, delay: 200, delayOnTouchOnly: true, touchStartThreshold: 5, ghostClass: 'sortable-ghost',
+                    onStart: (evt) => {
+                        originalNextSibling = evt.item.nextSibling;
+                    },
+                    onEnd: (evt) => {
+                        if (evt.oldIndex !== undefined && evt.newIndex !== undefined && evt.oldIndex !== evt.newIndex) {
+                            // Revert standard DOM change so React can handle the rendering correctly
+                            if (originalNextSibling) {
+                                evt.from.insertBefore(evt.item, originalNextSibling);
+                            } else {
+                                evt.from.appendChild(evt.item);
+                            }
+
+                            let np = [...proprietatiMagazine];
+                            const [moved] = np.splice(evt.oldIndex, 1);
+                            np.splice(evt.newIndex, 0, moved);
+                            updateProp(np);
+                        }
+                    }
+                });
+                return () => sortable.destroy();
+            }
+        }, [proprietatiMagazine]);
+
+        useEffect(() => {
+            if (categoriesContainerRef.current) {
+                let originalNextSibling = null;
+                const sortable = new Sortable(categoriesContainerRef.current, {
+                    animation: 150, delay: 200, delayOnTouchOnly: true, touchStartThreshold: 5, ghostClass: 'sortable-ghost',
+                    handle: '.cat-drag-handle',
+                    onStart: (evt) => {
+                        originalNextSibling = evt.item.nextSibling;
+                    },
+                    onEnd: (evt) => {
+                        if (evt.oldIndex !== undefined && evt.newIndex !== undefined && evt.oldIndex !== evt.newIndex) {
+                            // Revert standard DOM change so React can handle the rendering correctly
+                            if (originalNextSibling) {
+                                evt.from.insertBefore(evt.item, originalNextSibling);
+                            } else {
+                                evt.from.appendChild(evt.item);
+                            }
+
+                            let cats = [...sortedCategories];
+                            const [moved] = cats.splice(evt.oldIndex, 1);
+                            cats.splice(evt.newIndex, 0, moved);
+                            
+                            let c = { ...catalogCategorii };
+                            cats.forEach(([name, data], idx) => {
+                                c[name] = { ...data, order: idx };
+                            });
+                            updateCatalog(c);
+                        }
+                    }
+                });
+                return () => sortable.destroy();
+            }
+        }, [sortedCategories, catalogCategorii]);
 
         return (
             <div className="animate-fade-in pb-[100px]">
@@ -536,118 +1172,131 @@
                 
                 <Card><CardRow>
                     <span className="font-bold">Tema Aplicației</span>
-                    <Select value={theme} onChange={e => setTheme(e.target.value)} className="!w-auto !m-0 !p-2">
-                        <option value="system">Sistem</option><option value="light">Albă</option><option value="dark">Neagră</option>
-                    </Select>
+                    <div className="flex gap-2">
+                        <button 
+                            id="theme-btn-light"
+                            onClick={() => setTheme('light')} 
+                            className={`px-3 py-1.5 text-[0.8rem] font-[900] rounded-xl transition-all cursor-pointer flex items-center gap-1.5 uppercase ${
+                                theme === 'light' 
+                                ? 'bg-accent text-white shadow-sm' 
+                                : 'bg-gray-100 dark:bg-gray-800 text-text-sec hover:opacity-80'
+                            }`}
+                        >
+                            <i className="fas fa-sun"></i> Albă
+                        </button>
+                        <button 
+                            id="theme-btn-dark"
+                            onClick={() => setTheme('dark')} 
+                            className={`px-3 py-1.5 text-[0.8rem] font-[900] rounded-xl transition-all cursor-pointer flex items-center gap-1.5 uppercase ${
+                                theme === 'dark' 
+                                ? 'bg-accent text-white shadow-sm' 
+                                : 'bg-gray-100 dark:bg-gray-800 text-text-sec hover:opacity-80'
+                            }`}
+                        >
+                            <i className="fas fa-moon"></i> Neagră
+                        </button>
+                        <button 
+                            id="theme-btn-system"
+                            onClick={() => setTheme('system')} 
+                            className={`px-3 py-1.5 text-[0.8rem] font-[900] rounded-xl transition-all cursor-pointer flex items-center gap-1.5 uppercase ${
+                                theme === 'system' 
+                                ? 'bg-accent text-white shadow-sm' 
+                                : 'bg-gray-100 dark:bg-gray-800 text-text-sec hover:opacity-80'
+                            }`}
+                        >
+                            <i className="fas fa-desktop"></i> Sistem
+                        </button>
+                    </div>
                 </CardRow></Card>
 
                 <Card>
                     <div className="flex justify-between items-center font-bold text-[1.1rem] mb-2">Rețele Magazine <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-50 dark:!bg-blue-900/30 !rounded-full" onClick={() => { setNewRet({ nume: '', culoare: CONFIG.COLORS.DEFAULT_SECTOR }); openModal(MODAL_TYPES.ADD_RET); }}/></div>
-                    {reteleMagazine.map((r, i) => (
-                        <CardRow key={i}>
-                            <div className="flex items-center gap-3">
-                                <span className="w-5 h-5 rounded-full shadow-sm" style={{backgroundColor: r.culoare}}></span> 
-                                <span className="font-bold">{r.nume}</span>
-                            </div>
-                            <div className="flex gap-2">
-                                <ButtonIcon icon="fas fa-pen" className="!text-accent !text-[1rem] !p-1" onClick={() => openModal(MODAL_TYPES.EDIT_RET, { index: i, nume: r.nume, culoare: r.culoare, oldName: r.nume })} />
-                                <ButtonDanger icon="fas fa-trash" onClick={() => confirmAction("Șterge rețea", "Sigur?", () => { let nr = [...reteleMagazine]; nr.splice(i,1); updateRetele(nr); })}/>
-                            </div>
-                        </CardRow>
-                    ))}
+                    <div ref={networksContainerRef}>
+                        {reteleMagazine.map((r, i) => (
+                            <CardRow key={r.nume} className="cursor-grab">
+                                <div className="flex items-center gap-3">
+                                    <i className="fas fa-grip-lines text-text-sec opacity-40 mr-1"></i>
+                                    <span className="w-5 h-5 rounded-full shadow-sm" style={{backgroundColor: r.culoare}}></span> 
+                                    <span className="font-bold">{r.nume}</span>
+                                </div>
+                                <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                                    <ButtonIcon icon="fas fa-pen" className="!text-accent !text-[1rem] !p-1" onClick={() => openModal(MODAL_TYPES.EDIT_RET, { index: i, nume: r.nume, culoare: r.culoare, oldName: r.nume })} />
+                                    <ButtonDanger icon="fas fa-trash" onClick={() => confirmAction("Șterge rețea", "Sigur?", () => { let nr = [...reteleMagazine]; nr.splice(i,1); updateRetele(nr); })}/>
+                                </div>
+                            </CardRow>
+                        ))}
+                    </div>
                 </Card>
 
                 {/* Detalii magazine cu editare creion */}
                 <Card>
                     <div className="flex justify-between items-center font-bold text-[1.1rem] mb-2">Detalii magazine <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-50 dark:!bg-blue-900/30 !rounded-full" onClick={() => { setNewProp(''); openModal(MODAL_TYPES.ADD_PROP); }}/></div>
-                    {proprietatiMagazine.map((p, i) => (
-                        <CardRow key={i}>
-                            <span className="font-semibold">{p}</span>
-                            <div className="flex gap-2">
-                                <ButtonIcon icon="fas fa-pen" className="!text-accent !text-[1rem] !p-1" onClick={() => promptAction("Schimbă Nume Câmp", p, "Ex: Telefon", (newName) => {
-                                    if(newName && newName !== p){
-                                        let np = [...proprietatiMagazine];
-                                        np[i] = newName;
-                                        updateProp(np);
-                                        
-                                        // Modificăm cheia din documentele magazinelor din Firestore pentru păstrarea datelor introduse anterior
-                                        db.collection('magazine').get().then(snap => {
-                                            let batch = db.batch();
-                                            let modified = false;
-                                            snap.forEach(doc => {
-                                                let data = doc.data();
-                                                if(data.proprietati && data.proprietati[p] !== undefined) {
-                                                    let props = { ...data.proprietati };
-                                                    props[newName] = props[p];
-                                                    delete props[p];
-                                                    batch.update(doc.ref, { proprietati: props });
-                                                    modified = true;
+                    <div ref={propsContainerRef}>
+                        {proprietatiMagazine.map((p, i) => (
+                            <CardRow key={p} className="cursor-grab">
+                                <span className="font-semibold flex items-center"><i className="fas fa-grip-lines text-text-sec opacity-40 mr-2"></i>{p}</span>
+                                <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                                    <ButtonIcon icon="fas fa-pen" className="!text-accent !text-[1rem] !p-1" onClick={() => {
+                                        const onRenameProp = (newName) => {
+                                            if(newName && newName !== p){
+                                                const exists = proprietatiMagazine.some((prop, iIdx) => iIdx !== i && prop.trim().toLowerCase() === newName.trim().toLowerCase());
+                                                if(exists) {
+                                                    openModal(MODAL_TYPES.ALERT, {
+                                                        msg: `Câmpul "${newName}" există deja. Vă rugăm să introduceți o denumire unică.`,
+                                                        prevType: MODAL_TYPES.PROMPT,
+                                                        prevData: { title: "Schimbă Nume Câmp", val: newName, placeholder: "Ex: Telefon", onSave: onRenameProp }
+                                                    });
+                                                    return false;
                                                 }
-                                            });
-                                            if(modified) batch.commit();
-                                        }).catch(err => console.error("Properties shift error:", err));
-                                    }
-                                })} />
-                                <ButtonDanger icon="fas fa-trash" onClick={() => confirmAction("Șterge câmp", `Sigur elimini câmpul "${p}" de la magazin?`, () => { 
-                                    let np = [...proprietatiMagazine]; 
-                                    np.splice(i,1); 
-                                    updateProp(np); 
-                                })}/>
-                            </div>
-                        </CardRow>
-                    ))}
+                                                let np = [...proprietatiMagazine];
+                                                np[i] = newName;
+                                                updateProp(np);
+                                                
+                                                // Modificăm cheia din documentele magazinelor din Firestore pentru păstrarea datelor introduse anterior
+                                                db.collection('magazine').get().then(snap => {
+                                                    let batch = db.batch();
+                                                    let modified = false;
+                                                    snap.forEach(doc => {
+                                                        let data = doc.data();
+                                                        if(data.proprietati && data.proprietati[p] !== undefined) {
+                                                            let props = { ...data.proprietati };
+                                                            props[newName] = props[p];
+                                                            delete props[p];
+                                                            batch.update(doc.ref, { proprietati: props });
+                                                            modified = true;
+                                                        }
+                                                    });
+                                                    if(modified) batch.commit();
+                                                }).catch(err => console.error("Properties shift error:", err));
+                                            }
+                                        };
+                                        promptAction("Schimbă Nume Câmp", p, "Ex: Telefon", onRenameProp);
+                                    }} />
+                                    <ButtonDanger icon="fas fa-trash" onClick={() => confirmAction("Șterge câmp", `Sigur elimini câmpul "${p}" de la magazin?`, () => { 
+                                        let np = [...proprietatiMagazine]; 
+                                        np.splice(i,1); 
+                                        updateProp(np); 
+                                    })}/>
+                                </div>
+                            </CardRow>
+                        ))}
+                    </div>
                 </Card>
 
                 <Card>
-                    <div className="flex justify-between items-center font-bold text-[1.1rem] mb-2">Produse & Valabilitate <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-50 dark:!bg-blue-900/30 !rounded-full" onClick={() => promptAction("Categorie Nouă", "", "Ex: Dulciuri", (n) => { if(n && !catalogCategorii[n]){ updateCatalog({...catalogCategorii, [n]: {termen: 30, unit: 'zile', produse: []}}); } })}/></div>
-                    <div className="mt-3">
-                        {sortedCategories.map(([catName, catData]) => {
-                            const isDrojdii = catName === 'Drojdii';
-                            return (
-                                <Card key={catName} className="!m-[0_0_15px_0] border border-border-color dark:border-dark-border !shadow-none !p-3">
-                                    <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-                                        <div className="font-black flex items-center gap-2 text-[1.05rem]">
-                                            {catName} <ButtonIcon icon="fas fa-pen" className="!text-accent !text-[0.9rem] !p-1" onClick={() => promptAction("Redenumește", catName, "Nume", (newName) => { if(newName && newName !== catName){ let c={...catalogCategorii}; c[newName]=c[catName]; delete c[catName]; updateCatalog(c); db.collection("produse_magazin").where("categorie","==",catName).get().then(s=>{let b=db.batch(); s.forEach(d=>b.update(d.ref,{categorie:newName})); b.commit();}); } })}/>
-                                        </div>
-                                        <div className="flex gap-2 items-center bg-gray-100 dark:bg-gray-800 p-1.5 rounded-xl">
-                                            {!isDrojdii ? (
-                                                <React.Fragment>
-                                                    <input type="number" min="0" value={catData.termen} onChange={e => { let c={...catalogCategorii}; let val=parseInt(e.target.value); if(isNaN(val)||val<0)val=0; c[catName].termen=val; updateCatalog(c); }} className="w-[50px] bg-transparent text-center font-bold outline-none font-medium text-text-main dark:text-white" />
-                                                    <select value={catData.unit} onChange={e => { let c={...catalogCategorii}; c[catName].unit=e.target.value; updateCatalog(c); }} className="bg-transparent font-bold outline-none cursor-pointer pr-1 text-text-main dark:text-white">
-                                                        <option value="zile" className="dark:bg-[#1a1a1c]">Zile</option>
-                                                        <option value="luni" className="dark:bg-[#1a1a1c]">Luni</option>
-                                                    </select>
-                                                </React.Fragment>
-                                            ) : <span className="text-[0.8rem] text-danger font-bold px-2">Exp. Manuală</span>}
-                                        </div>
-                                    </div>
-                                    <div className="border-t border-dashed border-border-color dark:border-dark-border pt-2">
-                                        {catData.produse.map((p, idx) => (
-                                            <CardRow key={idx} className="!p-[8px_5px] !text-[0.95rem] hover:bg-gray-50 dark:hover:bg-gray-900/40 rounded-lg pr-1">
-                                                <span className="font-medium">{p}</span>
-                                                <div className="flex items-center gap-1">
-                                                    {/* Săgeată Sus */}
-                                                    <ButtonIcon 
-                                                        icon="fas fa-chevron-up" 
-                                                        className={`!text-[0.85rem] !p-1 ${idx === 0 ? 'opacity-30 pointer-events-none' : '!text-accent'}`} 
-                                                        onClick={() => moveProduct(catName, idx, 'up')} 
-                                                    />
-                                                    {/* Săgeată Jos */}
-                                                    <ButtonIcon 
-                                                        icon="fas fa-chevron-down" 
-                                                        className={`!text-[0.85rem] !p-1 ${idx === catData.produse.length - 1 ? 'opacity-30 pointer-events-none' : '!text-accent'}`} 
-                                                        onClick={() => moveProduct(catName, idx, 'down')} 
-                                                    />
-                                                    <ButtonIcon icon="fas fa-pen" className="!text-accent !text-[0.9rem] !p-1" onClick={() => promptAction("Redenumește", p, "Nume", (newName) => { if(newName && newName !== p){ let c={...catalogCategorii}; c[catName].produse[idx]=newName; updateCatalog(c); db.collection("produse_magazin").where("categorie","==",catName).where("nume","==",p).get().then(s=>{let b=db.batch(); s.forEach(d=>b.update(d.ref,{nume:newName})); b.commit();}); } })} />
-                                                    <ButtonDanger icon="fas fa-trash" className="!text-[0.9rem] !p-1" onClick={() => confirmAction("Șterge", `Elimini ${p}?`, () => { let c={...catalogCategorii}; c[catName].produse.splice(idx,1); updateCatalog(c); })} />
-                                                </div>
-                                            </CardRow>
-                                        ))}
-                                        <button onClick={() => promptAction(`Adaugă în ${catName}`, "", "Nume produs", (n) => { if(n){ let c={...catalogCategorii}; c[catName].produse.push(n); updateCatalog(c); } })} className="bg-blue-50 dark:bg-blue-900/30 border-none text-accent font-bold rounded-xl p-3 mt-2 w-full text-center cursor-pointer"><i className="fas fa-plus mr-1"></i> Adaugă Produs</button>
-                                    </div>
-                                </Card>
-                            )
-                        })}
+                    <div className="flex justify-between items-center font-bold text-[1.1rem] mb-2">Produse & Valabilitate <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-50 dark:!bg-blue-900/30 !rounded-full" onClick={() => promptAction("Categorie Nouă", "", "Ex: Dulciuri", handleAddCategory)}/></div>
+                    <div className="mt-3" ref={categoriesContainerRef}>
+                        {sortedCategories.map(([catName, catData]) => (
+                            <SettingsCategoryCard 
+                                key={catName} 
+                                catName={catName} 
+                                catData={catData} 
+                                catalogCategorii={catalogCategorii} 
+                                updateCatalog={updateCatalog} 
+                                promptAction={promptAction} 
+                                confirmAction={confirmAction} 
+                            />
+                        ))}
                     </div>
                 </Card>
 
@@ -656,7 +1305,23 @@
                     <Input type="color" value={newRet.culoare} onChange={e=>setNewRet({...newRet, culoare:e.target.value})} className="!h-[50px] !p-[3px] cursor-pointer" />
                     <div className="flex gap-3 pt-5">
                         <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
-                        <PrimaryButton onClick={()=>{if(newRet.nume){let nr=[...reteleMagazine]; nr.push(newRet); updateRetele(nr); closeModal();}}}>Salvează</PrimaryButton>
+                        <PrimaryButton onClick={()=>{
+                            if(newRet.nume.trim()){
+                                const exists = reteleMagazine.some(r => r.nume.trim().toLowerCase() === newRet.nume.trim().toLowerCase());
+                                if(exists) {
+                                    openModal(MODAL_TYPES.ALERT, {
+                                        msg: `Rețeaua "${newRet.nume}" există deja. Vă rugăm să introduceți o denumire unică.`,
+                                        prevType: MODAL_TYPES.ADD_RET,
+                                        prevData: null
+                                    });
+                                    return;
+                                }
+                                let nr=[...reteleMagazine]; 
+                                nr.push({ nume: newRet.nume.trim(), culoare: newRet.culoare }); 
+                                updateRetele(nr); 
+                                closeModal();
+                            }
+                        }}>Salvează</PrimaryButton>
                     </div>
                 </BaseModal>
                 
@@ -664,7 +1329,23 @@
                     <Input placeholder="Ex: Telefon" value={newProp} onChange={e=>setNewProp(e.target.value)} />
                     <div className="flex gap-3 pt-5">
                         <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
-                        <PrimaryButton onClick={()=>{if(newProp){let np=[...proprietatiMagazine]; np.push(newProp); updateProp(np); closeModal();}}}>Salvează</PrimaryButton>
+                        <PrimaryButton onClick={()=>{
+                            if(newProp.trim()){
+                                const exists = proprietatiMagazine.some(p => p.trim().toLowerCase() === newProp.trim().toLowerCase());
+                                if(exists) {
+                                    openModal(MODAL_TYPES.ALERT, {
+                                        msg: `Câmpul "${newProp}" există deja. Vă rugăm să introduceți o denumire unică.`,
+                                        prevType: MODAL_TYPES.ADD_PROP,
+                                        prevData: null
+                                    });
+                                    return;
+                                }
+                                let np=[...proprietatiMagazine]; 
+                                np.push(newProp.trim()); 
+                                updateProp(np); 
+                                closeModal();
+                            }
+                        }}>Salvează</PrimaryButton>
                     </div>
                 </BaseModal>
             </div>
@@ -716,13 +1397,14 @@
                                 <div className={`font-black leading-tight mb-1 ${columns === 2 ? 'text-[1.05rem]' : 'text-[1.2rem]'}`}>{m.nume}</div>
                                 <div className={`text-text-sec font-medium leading-tight ${columns === 2 ? 'text-[0.85rem]' : 'text-[0.95rem]'}`}>{m.adresa}</div>
                             </div>
-                            <button className={`absolute top-1/2 -translate-y-1/2 bg-transparent border-none text-danger p-2 cursor-pointer hover:scale-110 transition-transform ${columns === 2 ? 'right-[5px] text-[1rem]' : 'right-[15px] text-[1.2rem]'}`} onClick={(e)=>{e.stopPropagation(); confirmAction("Ștergere", "Ștergi magazinul?", ()=>FirebaseService.delete('magazine', m.id));}}><i className="fas fa-trash"></i></button>
+                            <button className={`absolute top-1/2 -translate-y-1/2 bg-transparent border-none text-danger p-2 cursor-pointer hover:scale-110 transition-transform ${columns === 2 ? 'right-[5px] text-[1rem]' : 'right-[15px] text-[1.2rem]'}`} onClick={(e)=>{e.stopPropagation(); confirmAction("Ștergere", "Ștergi magazinul cu toate produsele și loturile sale?", ()=>FirebaseService.deleteStoreCascading(m.id));}}><i className="fas fa-trash"></i></button>
                         </Card>
                     ))}
                 </div>
 
                 <ExpirariBox type="sector" data={{currentSectorId: sector.id}} />
                 
+                <FABSearch onClick={() => openModal(MODAL_TYPES.SEARCH)} />
                 <FAB onClick={() => { setNewMag({nume: '', adresa: '', retea: (reteleMagazine[0]?.nume || 'Local')}); openModal(MODAL_TYPES.ADD_STORE); }} />
 
                 <BaseModal isOpen={modal.type === MODAL_TYPES.ADD_STORE} title="Adaugă Magazin">
@@ -759,6 +1441,203 @@
                     </div>
                 </BaseModal>
             </div>
+        );
+    };
+
+    const StorePhotosSection = ({ magazinId, confirmAction }) => {
+        const [photos, setPhotos] = useState([]);
+        const [loading, setLoading] = useState(true);
+        const [uploading, setUploading] = useState(false);
+        const [selectedPhoto, setSelectedPhoto] = useState(null);
+
+        useEffect(() => {
+            setLoading(true);
+            const unsubscribe = db.collection('poze_magazine')
+                .where('magazinId', '==', magazinId)
+                .orderBy('timestamp', 'desc')
+                .onSnapshot(snapshot => {
+                    const list = [];
+                    snapshot.forEach(doc => {
+                        list.push({ id: doc.id, ...doc.data() });
+                    });
+                    setPhotos(list);
+                    setLoading(false);
+                }, err => {
+                    console.error("Eroare incarcare poze magazin:", err);
+                    setLoading(false);
+                });
+            return () => unsubscribe();
+        }, [magazinId]);
+
+        const handleFileSelect = (file) => {
+            if (!file) return;
+            setUploading(true);
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    const MAX_SIZE = 700; // Redimensionare optimă pentru stocare eficientă în Firestore
+                    if (width > height) {
+                        if (width > MAX_SIZE) {
+                            height *= MAX_SIZE / width;
+                            width = MAX_SIZE;
+                        }
+                    } else {
+                        if (height > MAX_SIZE) {
+                            width *= MAX_SIZE / height;
+                            height = MAX_SIZE;
+                        }
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82); // Compresie excelentă (~35-65 KB)
+
+                    db.collection('poze_magazine').add({
+                        magazinId,
+                        image: compressedDataUrl,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    })
+                    .then(() => {
+                        setUploading(false);
+                    })
+                    .catch(err => {
+                        console.error("Eroare salvare poza magazin:", err);
+                        setUploading(false);
+                        alert("Eroare salvare poză: " + err.message);
+                    });
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        const handleDeletePhoto = (photoId, e) => {
+            if (e) e.stopPropagation();
+            confirmAction("Șterge Poză", "Sigur dorești să ștergi această poză din magazin?", () => {
+                db.collection('poze_magazine').doc(photoId).delete()
+                    .catch(err => console.error("Eroare stergere poza magazin:", err));
+            });
+        };
+
+        return (
+            <Card className="!p-4 border border-border-color dark:border-dark-border shadow-sm">
+                <div className="flex justify-between items-center font-black text-[1.2rem] mb-2">
+                    <span className="flex items-center gap-2">
+                        <i className="fas fa-images text-accent animate-pulse-fast"></i>
+                        Poze magazin / depozit
+                    </span>
+                    <span className="text-[0.75rem] font-bold text-text-sec bg-blue-50 dark:bg-blue-950/20 p-1.5 rounded-lg border border-blue-100 dark:border-blue-900/30">
+                        {photos.length} {photos.length === 1 ? 'poză' : 'poze'}
+                    </span>
+                </div>
+
+                {loading ? (
+                    <div className="flex justify-center items-center py-6">
+                        <i className="fas fa-spinner animate-spin text-accent text-[1.5rem]"></i>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-3 gap-2.5 mt-3">
+                        {photos.map(p => (
+                            <div 
+                                key={p.id} 
+                                className="relative aspect-square rounded-xl overflow-hidden bg-gray-50 dark:bg-gray-900 border border-border-color dark:border-dark-border group cursor-pointer hover:opacity-90 active:scale-95 transition-all"
+                                onClick={() => setSelectedPhoto(p)}
+                            >
+                                <img src={p.image} alt="Magazin" className="w-full h-full object-cover rounded-xl" />
+                                <button 
+                                    onClick={(e) => handleDeletePhoto(p.id, e)}
+                                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-[0.7rem] hover:scale-110 active:scale-95 transition-transform shadow-lg border border-white/20"
+                                    title="Șterge poză"
+                                >
+                                    <i className="fas fa-trash-can"></i>
+                                </button>
+                            </div>
+                        ))}
+
+                        {/* Buton adaugă poză */}
+                        <div 
+                            onClick={() => document.getElementById('store_photo_file_input').click()}
+                            className={`aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center p-2 cursor-pointer transition-all ${
+                                uploading 
+                                ? 'border-accent bg-blue-50/50 dark:bg-blue-900/10' 
+                                : 'border-border-color dark:border-dark-border hover:border-accent hover:bg-gray-50 dark:hover:bg-gray-900/10 active:scale-95'
+                            }`}
+                        >
+                            {uploading ? (
+                                <React.Fragment>
+                                    <i className="fas fa-spinner animate-spin text-accent text-[1.5rem] mb-1"></i>
+                                    <span className="text-[0.65rem] font-black text-accent text-center leading-tight">Încărcare...</span>
+                                </React.Fragment>
+                            ) : (
+                                <React.Fragment>
+                                    <i className="fas fa-camera text-accent text-[1.4rem] mb-1"></i>
+                                    <span className="text-[0.7rem] font-bold text-text-main dark:text-white text-center leading-tight">Adaugă Poză</span>
+                                </React.Fragment>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                <input 
+                    type="file" 
+                    id="store_photo_file_input" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={e => {
+                        if (e.target.files && e.target.files[0]) {
+                            handleFileSelect(e.target.files[0]);
+                        }
+                    }} 
+                />
+
+                {/* Lightbox / Modal de vizualizare completă a pozei */}
+                {selectedPhoto && (
+                    <div 
+                        className="fixed inset-0 bg-black/95 z-[1100] flex flex-col justify-between p-4 animate-fade-in backdrop-blur-sm"
+                        onClick={() => setSelectedPhoto(null)}
+                    >
+                        <div className="flex justify-between items-center w-full pt-2">
+                            <span className="text-white font-black text-[0.95rem] bg-gray-900/80 p-2 px-3 rounded-xl border border-white/10">
+                                Detalii Foto Magazin
+                            </span>
+                            <button 
+                                className="w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors"
+                                onClick={() => setSelectedPhoto(null)}
+                            >
+                                <i className="fas fa-times text-lg"></i>
+                            </button>
+                        </div>
+
+                        <div className="flex-1 flex items-center justify-center p-2 max-h-[85vh]">
+                            <img 
+                                src={selectedPhoto.image} 
+                                alt="Vizualizare completă" 
+                                className="max-w-[100vw] max-h-[75vh] object-contain rounded-xl shadow-2xl border border-white/15"
+                                onClick={(e) => e.stopPropagation()} 
+                            />
+                        </div>
+
+                        <div className="flex gap-3 justify-center pb-4 pt-2">
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const idToDelete = selectedPhoto.id;
+                                    setSelectedPhoto(null);
+                                    handleDeletePhoto(idToDelete);
+                                }}
+                                className="bg-red-600 hover:bg-red-700 text-white font-black rounded-xl p-3.5 text-[0.85rem] uppercase cursor-pointer transition-colors flex items-center gap-2 px-6 shadow-xl"
+                            >
+                                <i className="fas fa-trash"></i> Șterge această poză
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </Card>
         );
     };
 
@@ -799,6 +1678,12 @@
         const [propVals, setPropVals] = useState(magazin.proprietati || {});
         useEffect(() => { setPropVals(magazin.proprietati || {}); }, [magazin.proprietati]);
 
+        useEffect(() => {
+            if (modal.type === MODAL_TYPES.ADD_PRODUCT && modal.data) {
+                setNewProdState({ cat: modal.data.cat || '', nume: modal.data.nume || '' });
+            }
+        }, [modal.type, modal.data]);
+
         return (
             <div className="animate-fade-in pb-[100px]">
                 <FrozenHeader title={magazin.nume} subtitle={magazin.adresa} bgColor={magazin.culoare || CONFIG.COLORS.DEFAULT_STORE} actions={
@@ -825,13 +1710,15 @@
                     ))}
                 </Card>
 
+                <StorePhotosSection magazinId={magazin.id} confirmAction={confirmAction} />
+
                 <div>
                     {/* Sortează și afișează categoriile conform ordinii dorite */}
                     {Object.entries(prodGrupate).sort(([catA], [catB]) => {
-                        let indA = PREFERRED_CAT_ORDER.indexOf(catA);
-                        let indB = PREFERRED_CAT_ORDER.indexOf(catB);
-                        if (indA === -1) indA = 999;
-                        if (indB === -1) indB = 999;
+                        const orderA = catalogCategorii[catA]?.order !== undefined ? catalogCategorii[catA].order : PREFERRED_CAT_ORDER.indexOf(catA);
+                        const orderB = catalogCategorii[catB]?.order !== undefined ? catalogCategorii[catB].order : PREFERRED_CAT_ORDER.indexOf(catB);
+                        const indA = orderA === -1 ? 999 : orderA;
+                        const indB = orderB === -1 ? 999 : orderB;
                         return indA - indB;
                     }).map(([cat, produse]) => {
                         const isDeschis = openCats[cat] !== undefined ? openCats[cat] : produse.length > 0;
@@ -840,7 +1727,7 @@
                                 <div className="flex justify-between items-center font-black text-[1.1rem] cursor-pointer p-5 bg-gray-50 dark:bg-gray-800/50" onClick={()=>toggleCat(cat)}>
                                     {cat}
                                     <div className="flex items-center gap-[15px]">
-                                        <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-100 dark:!bg-blue-900/50 !rounded-full !p-[6px_8px] !text-[0.9rem]" onClick={(e)=>{e.stopPropagation(); setNewProdState({cat: cat, nume: ''}); openModal(MODAL_TYPES.ADD_PRODUCT);}} />
+                                        <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-100 dark:!bg-blue-900/50 !rounded-full !p-[6px_8px] !text-[0.9rem]" onClick={(e)=>{e.stopPropagation(); setNewProdState({cat: cat, nume: ''}); openModal(MODAL_TYPES.ADD_PRODUCT, {cat: cat, nume: ''});}} />
                                         <i className={`fas fa-chevron-down text-border-color transition-transform ${isDeschis ? 'rotate-0' : 'rotate-90'}`}></i>
                                     </div>
                                 </div>
@@ -851,7 +1738,7 @@
                                             <div className={`flex justify-between items-center py-3 mx-5 ${idx > 0 ? 'border-t-2 border-gray-200 dark:border-gray-700' : 'border-t-2 border-transparent'}`}>
                                                 <span className="font-bold text-[1.05rem]">{p.nume}</span>
                                                 <div className="flex items-center">
-                                                    <ButtonDanger icon="fas fa-trash" className="mr-[10px] !text-[1.1rem]" onClick={(e)=>{e.stopPropagation(); confirmAction("Șterge","Sigur?",()=>FirebaseService.delete('produse_magazin', p.id));}} />
+                                                    <ButtonDanger icon="fas fa-trash" className="mr-[10px] !text-[1.1rem]" onClick={(e)=>{e.stopPropagation(); confirmAction("Șterge","Ștergi produsul cu toate loturile sale?", ()=>FirebaseService.deleteProductCascading(p.id));}} />
                                                     <i className="fas fa-chevron-right text-border-color"></i>
                                                 </div>
                                             </div>
@@ -865,6 +1752,8 @@
 
                 <ExpirariBox type="store" data={{currentStoreId: magazin.id}} />
 
+                <FABSearch onClick={() => openModal(MODAL_TYPES.SEARCH)} />
+
                 <BaseModal isOpen={modal.type === MODAL_TYPES.ADD_PRODUCT} title={`Adaugă în: ${newProdState.cat}`}>
                     <div className="text-[0.95rem] font-bold text-text-sec mb-[5px]">Alege din catalog:</div>
                     <Select value={newProdState.nume} onChange={e=>setNewProdState({...newProdState, nume: e.target.value})}>
@@ -875,9 +1764,24 @@
                         <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
                         <PrimaryButton onClick={()=>{
                             if(newProdState.nume){
+                                const exists = prodInMag.some(p => p.nume.trim().toLowerCase() === newProdState.nume.trim().toLowerCase());
+                                if(exists) {
+                                    openModal(MODAL_TYPES.ALERT, {
+                                        msg: `Produsul "${newProdState.nume}" există deja în acest magazin. Vă rugăm să selectați un alt produs.`,
+                                        prevType: MODAL_TYPES.ADD_PRODUCT,
+                                        prevData: { cat: newProdState.cat, nume: newProdState.nume }
+                                    });
+                                    return;
+                                }
                                 FirebaseService.add('produse_magazin', {magazinId: magazin.id, categorie: newProdState.cat, nume: newProdState.nume});
                                 closeModal();
-                            } else { alert("Alege un produs!"); }
+                            } else {
+                                openModal(MODAL_TYPES.ALERT, {
+                                    msg: "Vă rugăm să selectați un produs din listă.",
+                                    prevType: MODAL_TYPES.ADD_PRODUCT,
+                                    prevData: { cat: newProdState.cat, nume: '' }
+                                });
+                            }
                         }}>Salvează</PrimaryButton>
                     </div>
                 </BaseModal>
@@ -1025,6 +1929,7 @@
         useEffect(() => { setNotite(prod.notite || ''); }, [prod.notite]);
 
         const [newLot, setNewLot] = useState({ qty: '', data: '' });
+        const dateInputRef = useRef(null); // Referință pentru calendar input programatic
 
         const [actualizatData, setActualizatData] = useState(() => {
             const acum = new Date();
@@ -1057,16 +1962,17 @@
 
                 <Card>
                     <div className="font-black text-[1.2rem] mb-2">Cantitatea</div>
-                    <CardRow className="!py-1">
-                        <span className="font-bold">Depozit:</span> 
-                        <Input 
-                            type="text" 
-                            className="!w-[50%] !m-0 !p-2 !text-center font-bold text-text-main dark:text-white" 
+                    <div className="flex items-start gap-3 mt-3 w-full">
+                        <span className="font-bold mt-2.5 hover:cursor-default shrink-0 text-text-main dark:text-white">Depozit:</span>
+                        <textarea 
+                            className="flex-1 p-3 border border-border-color dark:border-dark-border rounded-xl bg-bg-color dark:bg-dark-bg font-medium outline-none focus:border-accent text-text-main dark:text-white resize-y min-h-[55px]" 
+                            placeholder="Introduceți stoc depozit..." 
+                            rows="2"
                             value={depozit}
                             onChange={e=>setDepozit(e.target.value)}
                             onBlur={()=>{ FirebaseService.update('produse_magazin', prod.id, { depozit }); triggerUpdate(); }}
-                        />
-                    </CardRow>
+                        ></textarea>
+                    </div>
                     <div className="grid grid-cols-2 gap-3 mt-4">
                         <div className="bg-bg-color dark:bg-dark-bg p-3 rounded-xl text-center border border-border-color dark:border-dark-border shadow-sm">
                             <span className="block text-[0.8rem] font-bold text-text-sec uppercase tracking-wide mb-1">Vitrină (Sumă)</span>
@@ -1112,14 +2018,30 @@
                     <Input type="number" min="0" placeholder="Cantitate (opțional)" value={newLot.qty} onChange={e=>setNewLot({...newLot, qty:e.target.value})} />
                     <div className="flex gap-[10px] items-center mt-2 w-full">
                         <Input placeholder="Data (ZZ.LL.AAAA)" value={newLot.data} onChange={e=>setNewLot({...newLot, data:e.target.value})} className="flex-1" />
-                        <label className="relative flex items-center justify-center p-3 border border-border-color dark:border-dark-border rounded-xl bg-bg-color dark:bg-dark-bg text-accent h-[50px] mt-1 cursor-pointer w-[50px] flex-shrink-0">
-                            <i className="fas fa-calendar-alt text-xl"></i>
-                            <input type="date" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={e=>{
-                                if(!e.target.value) return; 
-                                let d=new Date(e.target.value); 
-                                setNewLot({...newLot, data: `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`});
-                            }} />
-                        </label>
+                        <div 
+                            onClick={() => {
+                                if (dateInputRef.current) {
+                                    if (typeof dateInputRef.current.showPicker === 'function') {
+                                        try { dateInputRef.current.showPicker(); } catch (err) { dateInputRef.current.click(); }
+                                    } else {
+                                        dateInputRef.current.click();
+                                    }
+                                }
+                            }}
+                            className="relative flex items-center justify-center p-3 border border-border-color dark:border-dark-border rounded-xl bg-bg-color dark:bg-dark-bg text-accent h-[50px] mt-1 cursor-pointer w-[50px] flex-shrink-0"
+                        >
+                            <i className="fas fa-calendar-alt text-xl pointer-events-none"></i>
+                            <input 
+                                ref={dateInputRef}
+                                type="date" 
+                                className="absolute inset-0 w-full h-full opacity-0 pointer-events-none" 
+                                onChange={e=>{
+                                    if(!e.target.value) return; 
+                                    let d=new Date(e.target.value); 
+                                    setNewLot({...newLot, data: `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`});
+                                }} 
+                            />
+                        </div>
                     </div>
                     <div className={`text-[0.85rem] mt-2 text-center font-bold ${isDrojdii ? 'text-danger' : 'text-text-sec'}`}>
                         {isDrojdii ? 'Se cere Data Expirării (ZZ.LL.AAAA)' : 'Se cere Data Prod. (ZZ.LL.AAAA)'}
@@ -1146,11 +2068,71 @@
         );
     };
 
+    const SearchModal = ({ isOpen, onClose, dbMagazine, dbSectoare, setView }) => {
+        const [query, setQuery] = useState('');
+        
+        const results = useMemo(() => {
+            if (!query.trim()) return [];
+            const q = query.toLowerCase();
+            return Object.values(dbMagazine).filter(m => {
+                const nameMatch = m.nume && m.nume.toLowerCase().includes(q);
+                const addressMatch = m.adresa && m.adresa.toLowerCase().includes(q);
+                return nameMatch || addressMatch;
+            });
+        }, [query, dbMagazine]);
+
+        return (
+            <BaseModal isOpen={isOpen} title="Caută Magazin">
+                <div className="flex flex-col gap-3">
+                    <Input 
+                        placeholder="Nume magazin sau adresă..." 
+                        value={query} 
+                        onChange={e => setQuery(e.target.value)} 
+                        autoFocus 
+                    />
+                    <div className="max-h-[300px] overflow-y-auto mt-2 flex flex-col gap-2">
+                        {query.trim() && results.length === 0 ? (
+                            <div className="text-center text-text-sec text-[0.9rem] p-4 font-medium">Nu s-a găsit niciun magazin.</div>
+                        ) : null}
+                        {results.map(m => {
+                            const sec = dbSectoare[m.sectorId] || { nume: 'N/A', culoare: '#666' };
+                            return (
+                                <div 
+                                    key={m.id} 
+                                    onClick={() => {
+                                        setView({ page: PAGES.STORE, data: { magazin: m, sector: sec } });
+                                        onClose();
+                                        setQuery('');
+                                    }}
+                                    className="p-3 border border-border-color dark:border-dark-border rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex justify-between items-center"
+                                >
+                                    <div className="flex-1 pr-2 text-left">
+                                        <div className="font-bold text-[1.05rem] text-text-main dark:text-white flex items-center gap-2">
+                                            <span className="w-3.5 h-3.5 rounded-full inline-block shrink-0" style={{ backgroundColor: m.culoare }} />
+                                            {m.nume}
+                                        </div>
+                                        <div className="text-[0.85rem] text-text-sec font-medium mt-1">{m.adresa}</div>
+                                    </div>
+                                    <span className="text-[0.75rem] font-black text-white px-2.5 py-1 rounded-full uppercase shrink-0" style={{ backgroundColor: sec.culoare }}>
+                                        {sec.nume}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <div className="flex justify-end mt-2">
+                        <SecondaryButton onClick={() => { onClose(); setQuery(''); }} className="!flex-initial px-5">Închide</SecondaryButton>
+                    </div>
+                </div>
+            </BaseModal>
+        );
+    };
+
     // ==========================================
     // 8. MAIN APP
     // ==========================================
     const MainApp = () => {
-        const { isReady, view, modal, closeModal, reteleMagazine, updateRetele } = useApp();
+        const { isReady, view, setView, modal, openModal, closeModal, dbMagazine, dbSectoare, reteleMagazine, updateRetele } = useApp();
         const [editRetState, setEditRetState] = useState({ nume: '', culoare: '' });
         
         useEffect(() => {
@@ -1196,6 +2178,24 @@
                     </div>
                 </BaseModal>
 
+                <BaseModal isOpen={modal.type === MODAL_TYPES.PRODUCT_IMAGE} title="Imagine Produs / Cod de Bare">
+                    {modal.type === MODAL_TYPES.PRODUCT_IMAGE && modal.data && (
+                        <ProductImageModalContent 
+                            catName={modal.data.catName} 
+                            prodName={modal.data.prodName} 
+                            closeModal={closeModal} 
+                        />
+                    )}
+                </BaseModal>
+
+                <SearchModal 
+                    isOpen={modal.type === MODAL_TYPES.SEARCH} 
+                    onClose={closeModal} 
+                    dbMagazine={dbMagazine} 
+                    dbSectoare={dbSectoare} 
+                    setView={setView} 
+                />
+
                 <BaseModal isOpen={modal.type === MODAL_TYPES.CONFIRM} title={modal.data?.title}>
                     <p className="text-text-main dark:text-white font-medium text-[1.1rem] mb-5 mt-0">{modal.data?.msg}</p>
                     <div className="flex gap-3">
@@ -1204,15 +2204,36 @@
                     </div>
                 </BaseModal>
 
-                <BaseModal isOpen={modal.type === MODAL_TYPES.PROMPT} title={modal.data?.title}>
+                <BaseModal isOpen={modal.type === MODAL_TYPES.PROMPT} title={modal.data?.title} key={modal.data?.title + "_" + (modal.data?.val || "")}>
                     <Input placeholder={modal.data?.placeholder} defaultValue={modal.data?.val} id="prompt-input" autoFocus />
                     <div className="flex gap-3 pt-5">
                         <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
                         <PrimaryButton onClick={()=>{
                             let val = document.getElementById('prompt-input').value.trim();
-                            if(modal.data?.onSave) modal.data.onSave(val); 
-                            closeModal();
+                            let shouldClose = true;
+                            if(modal.data?.onSave) {
+                                shouldClose = modal.data.onSave(val) !== false;
+                            }
+                            if (shouldClose) closeModal();
                         }}>Salvează</PrimaryButton>
+                    </div>
+                </BaseModal>
+
+                <BaseModal isOpen={modal.type === MODAL_TYPES.ALERT} title="Atenție!">
+                    <p className="text-text-main dark:text-white font-medium text-[1.1rem] mb-5 mt-0 text-center leading-relaxed">{modal.data?.msg}</p>
+                    <div className="flex justify-center pt-3">
+                        <button 
+                            onClick={() => {
+                                if(modal.data?.prevType) {
+                                    openModal(modal.data.prevType, modal.data.prevData);
+                                } else {
+                                    closeModal();
+                                }
+                            }} 
+                            className="bg-accent hover:bg-blue-700 text-white font-black rounded-xl p-[10px_35px] shadow-md uppercase text-[0.85rem] transition-colors"
+                        >
+                            Confirmă
+                        </button>
                     </div>
                 </BaseModal>
             </React.Fragment>
