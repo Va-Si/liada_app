@@ -237,7 +237,6 @@
                 },
                 onEnd: (evt) => {
                     if (evt.oldIndex !== undefined && evt.newIndex !== undefined && evt.oldIndex !== evt.newIndex) {
-                        // Revert standard DOM change so React can handle the rendering correctly
                         if (originalNextSibling) {
                             evt.from.insertBefore(evt.item, originalNextSibling);
                         } else {
@@ -316,7 +315,6 @@
         const [dbProduse, setDbProduse] = useState({});
         const [dbLoturi, setDbLoturi] = useState({});
 
-        // Setări Globale cu stocare în Firestore ca sursă unică a adevărului (pentru sincronizare multi-device)
         const [catalogCategorii, setCatalogCategorii] = useState(CONFIG.DEFAULT_CATALOG);
         const [reteleMagazine, setReteleMagazine] = useState(CONFIG.DEFAULT_RETELE);
         const [proprietatiMagazine, setProprietatiMagazine] = useState(CONFIG.DEFAULT_PROPS);
@@ -325,51 +323,41 @@
         const [gUser, setGUser] = useState(null);
         const [gToken, setGToken] = useState(null);
 
-        // Încarcă din localStorage tokenul temporar dacă există pentru o experiență mai fluidă
         useEffect(() => {
             const savedToken = localStorage.getItem('g_access_token');
             if (savedToken) {
                 setGToken(savedToken);
             }
+
+            // Verificăm dacă ne-am întors dintr-un redirect Google Auth
+            firebase.auth().getRedirectResult().then(result => {
+                if (result && result.credential) {
+                    const token = result.credential.accessToken;
+                    if (token) {
+                        setGToken(token);
+                        localStorage.setItem('g_access_token', token);
+                    }
+                }
+            }).catch(err => console.error("Eroare redirect:", err));
+
             const unsubAuth = firebase.auth().onAuthStateChanged(user => {
                 setGUser(user);
             });
             return () => unsubAuth();
         }, []);
 
-    const gSignIn = async () => {
-    try {
-        const provider = new firebase.auth.GoogleAuthProvider();
-        provider.addScope('https://www.googleapis.com/auth/spreadsheets');
-        provider.setCustomParameters({ prompt: 'consent' });
-
-        // În loc de popup, redirecționăm pagina. Este mult mai sigur și nu se blochează!
-        await firebase.auth().signInWithRedirect(provider);
-    } catch (err) {
-        console.error("Eroare la redirect:", err);
-        alert("Eroare la conectare: " + err.message);
-    }
-};
-        // Această funcție trebuie să ruleze când se încarcă pagina
-const checkRedirectResult = async () => {
-    try {
-        const result = await firebase.auth().getRedirectResult();
-        if (result && result.credential) {
-            const token = result.credential.accessToken;
-            if (token) {
-                setGToken(token);
-                localStorage.setItem('g_access_token', token);
-                console.log("Succes! Token obținut după redirect:", token);
-                alert("Te-ai conectat cu succes!");
+        const gSignIn = async () => {
+            try {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                provider.addScope('https://www.googleapis.com/auth/spreadsheets');
+                provider.setCustomParameters({ prompt: 'consent' });
+                await firebase.auth().signInWithRedirect(provider);
+            } catch (err) {
+                console.error("Eroare la redirect:", err);
+                alert("Eroare la conectare: " + err.message);
             }
-        }
-    } catch (err) {
-        console.error("Eroare la primirea rezultatului:", err);
-    }
-};
+        };
 
-// APELEAZĂ ASTA LA ÎNCĂRCAREA PAGINII (dacă folosești React useEffect sau un script care pornește la onload)
-// checkRedirectResult();
         const gSignOut = async () => {
             try {
                 await firebase.auth().signOut();
@@ -384,7 +372,6 @@ const checkRedirectResult = async () => {
         const getExpConf = (lvl, defVal, defUnit) => ({ val: Math.max(0, parseInt(localStorage.getItem(`expTimeVal_${lvl}`)) || defVal), unit: localStorage.getItem(`expTimeUnit_${lvl}`) || defUnit });
         const [expConfigs, setExpConfigs] = useState({ global: getExpConf('global', 2, 'luni'), sector: getExpConf('sector', 1, 'luni'), store: getExpConf('store', 2, 'saptamani') });
 
-        // Storage Updates - salvează acum direct în Firestore config_global, nu în localStorage!
         const updateCatalog = (newCat) => { 
             setCatalogCategorii(newCat);
             db.collection('setari').doc('config_global').set({ catalogCategorii: newCat }, { merge: true })
@@ -416,13 +403,11 @@ const checkRedirectResult = async () => {
             setExpConfigs(prev => ({ ...prev, [type]: { val, unit } })); 
         };
 
-        // Modal Helpers
         const openModal = (type, data = null) => setModal({ type, data });
         const closeModal = () => setModal({ type: null, data: null });
         const confirmAction = (title, msg, onConfirm) => openModal(MODAL_TYPES.CONFIRM, { title, msg, onConfirm });
         const promptAction = (title, val, placeholder, onSave) => openModal(MODAL_TYPES.PROMPT, { title, val, placeholder, onSave });
 
-        // Theme sync
         useEffect(() => {
             if (theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
                 document.documentElement.classList.add('dark'); document.body.setAttribute('data-theme', 'dark');
@@ -432,7 +417,6 @@ const checkRedirectResult = async () => {
             localStorage.setItem('theme', theme);
         }, [theme]);
 
-        // Firebase Realtime Sync pentru Date Aplicație & Setări Globale
         useEffect(() => {
             let loads = 0; 
             const checkReady = () => { loads++; if(loads === 5) setTimeout(() => setIsReady(true), 300); };
@@ -442,7 +426,6 @@ const checkRedirectResult = async () => {
             const u3 = db.collection('produse_magazin').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbProduse(obj); checkReady(); }, err => console.error(err));
             const u4 = db.collection('loturi').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbLoturi(obj); checkReady(); }, err => console.error(err));
             
-            // Ascultăm în timp real documentul global de setări din Firestore pentru sincronizare universală (mobil <-> desktop)
             const u5 = db.collection('setari').doc('config_global').onSnapshot(doc => {
                 if (doc.exists) {
                     const data = doc.data();
@@ -462,7 +445,6 @@ const checkRedirectResult = async () => {
                         setGoogleSheetName(data.googleSheetName);
                     }
                 } else {
-                    // Dacă e prima dată când pornește pe acel Firestore, inițializăm documentul cu CONFIG
                     db.collection('setari').doc('config_global').set({
                         catalogCategorii: CONFIG.DEFAULT_CATALOG,
                         reteleMagazine: CONFIG.DEFAULT_RETELE,
@@ -478,7 +460,6 @@ const checkRedirectResult = async () => {
             return () => { u1(); u2(); u3(); u4(); u5(); };
         }, []);
 
-        // History API (Swipe Back logic)
         const uiDepthRef = useRef(0);
         const popLockRef = useRef(false);
 
@@ -525,7 +506,6 @@ const checkRedirectResult = async () => {
         return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
     };
 
-    // --- Componentă Expirări Reutilizabilă ---
     const ExpirariBox = ({ type, data }) => {
         const { dbSectoare, dbMagazine, dbProduse, dbLoturi, expConfigs, updateExpConfig, setView, catalogCategorii } = useApp();
         const config = expConfigs[type];
@@ -632,9 +612,6 @@ const checkRedirectResult = async () => {
         );
     };
 
-    // ==========================================
-    // 7. PAGE COMPONENTS
-    // ==========================================
     const MainPage = () => {
         const { setView, dbSectoare, confirmAction, openModal, modal, closeModal } = useApp();
         const arrSectoare = Helpers.sortByOrder(Object.values(dbSectoare));
@@ -659,7 +636,6 @@ const checkRedirectResult = async () => {
             <div className="animate-fade-in pb-[100px]">
                 <FrozenHeader title="LIADA" bgColor={CONFIG.COLORS.LIADA_HEADER} actions={<ButtonIcon icon="fas fa-cog text-white" onClick={() => setView({page: PAGES.SETTINGS})} />} nav={<React.Fragment></React.Fragment>} />
                 
-                {/* w-full face ca chenarele sectoarelor să aibă exact aceeași lățime/margini ca și headerul Freeze 'LIADA' */}
                 <div className="w-full" ref={containerRef}>
                     {arrSectoare.length === 0 ? <div className="p-5 text-center text-text-sec font-medium">Nu există sectoare adăugate.</div> : null}
                     {arrSectoare.map(s => (
@@ -688,7 +664,6 @@ const checkRedirectResult = async () => {
         );
     };
 
-    // Componente auxiliare pentru gestionarea și afișarea imaginii produsului / codurilor de bare
     const ProductImageModalContent = ({ catName, prodName, closeModal }) => {
         const [imageUrl, setImageUrl] = useState('');
         const [loading, setLoading] = useState(true);
@@ -721,7 +696,7 @@ const checkRedirectResult = async () => {
                     const canvas = document.createElement('canvas');
                     let width = img.width;
                     let height = img.height;
-                    const MAX_SIZE = 800; // Calitate excelentă a imaginii, dar redimensionată sub limita de 1MB a documentului Firestore
+                    const MAX_SIZE = 800; 
                     if (width > height) {
                         if (width > MAX_SIZE) {
                             height *= MAX_SIZE / width;
@@ -965,7 +940,6 @@ const checkRedirectResult = async () => {
                     },
                     onEnd: (evt) => {
                         if (evt.oldIndex !== undefined && evt.newIndex !== undefined && evt.oldIndex !== evt.newIndex) {
-                            // Revert standard DOM change so React can handle the rendering correctly
                             if (originalNextSibling) {
                                 evt.from.insertBefore(evt.item, originalNextSibling);
                             } else {
@@ -1014,7 +988,6 @@ const checkRedirectResult = async () => {
                                         b.commit();
                                     });
 
-                                    // Mută imaginile produselor în noua categorie de documente
                                     if (catData && catData.produse) {
                                         catData.produse.forEach(p => {
                                             const oldId = `${catName}___${p}`;
@@ -1081,7 +1054,6 @@ const checkRedirectResult = async () => {
                                                     b.commit();
                                                 });
 
-                                                // Redenumește imaginea produsului dacă există
                                                 const oldId = `${catName}___${p}`;
                                                 const newId = `${catName}___${newName}`;
                                                 db.collection('imagini_produse').doc(oldId).get().then(doc => {
@@ -1187,7 +1159,6 @@ const checkRedirectResult = async () => {
                     },
                     onEnd: (evt) => {
                         if (evt.oldIndex !== undefined && evt.newIndex !== undefined && evt.oldIndex !== evt.newIndex) {
-                            // Revert standard DOM change so React can handle the rendering correctly
                             if (originalNextSibling) {
                                 evt.from.insertBefore(evt.item, originalNextSibling);
                             } else {
@@ -1215,7 +1186,6 @@ const checkRedirectResult = async () => {
                     },
                     onEnd: (evt) => {
                         if (evt.oldIndex !== undefined && evt.newIndex !== undefined && evt.oldIndex !== evt.newIndex) {
-                            // Revert standard DOM change so React can handle the rendering correctly
                             if (originalNextSibling) {
                                 evt.from.insertBefore(evt.item, originalNextSibling);
                             } else {
@@ -1244,7 +1214,6 @@ const checkRedirectResult = async () => {
                     },
                     onEnd: (evt) => {
                         if (evt.oldIndex !== undefined && evt.newIndex !== undefined && evt.oldIndex !== evt.newIndex) {
-                            // Revert standard DOM change so React can handle the rendering correctly
                             if (originalNextSibling) {
                                 evt.from.insertBefore(evt.item, originalNextSibling);
                             } else {
@@ -1310,7 +1279,6 @@ const checkRedirectResult = async () => {
                     </div>
                 </CardRow></Card>
 
-                {/* Secțiune Sincronizare Google Sheets */}
                 <Card>
                     <div className="flex items-center gap-2 font-bold text-[1.1rem] mb-3 text-emerald-600 dark:text-emerald-400">
                         <i className="fas fa-file-excel text-[1.2rem]"></i>
@@ -1348,9 +1316,7 @@ const checkRedirectResult = async () => {
                                 onClick={gSignIn}
                                 className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 shadow-sm border-none text-[0.85rem]"
                             >
-                                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                                    <path d="M12.24 10.285V13.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.859-3.578-7.859-8s3.529-8 7.859-8c2.46 0 4.105 1.025 5.047 1.926l2.427-2.334C17.955 2.192 15.34 1 12.24 1 6.033 1 12.24s5.033 11.24 11.24 11.24c6.478 0 10.793-4.537 10.793-10.985 0-.74-.078-1.3-.173-1.86H12.24z"/>
-                                </svg>
+                                <i className="fab fa-google text-[1.1rem]"></i>
                                 Conectează Google Sheets
                             </button>
                         )}
@@ -1365,7 +1331,6 @@ const checkRedirectResult = async () => {
                                 className="w-full bg-transparent border border-border-color dark:border-dark-border rounded-xl p-2.5 text-[0.85rem] outline-none focus:border-accent text-text-main dark:text-white"
                                 value={googleSpreadsheetId}
                                 onChange={e => {
-                                    // Dacă utilizatorul pune un URL întreg, încercăm să extragem ID-ul din el automat
                                     let val = e.target.value;
                                     const match = val.match(/\/d\/([a-zA-Z0-9-_]+)/);
                                     if (match && match[1]) {
@@ -1411,7 +1376,6 @@ const checkRedirectResult = async () => {
                     </div>
                 </Card>
 
-                {/* Detalii magazine cu editare creion */}
                 <Card>
                     <div className="flex justify-between items-center font-bold text-[1.1rem] mb-2">Detalii magazine <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-50 dark:!bg-blue-900/30 !rounded-full" onClick={() => { setNewProp(''); openModal(MODAL_TYPES.ADD_PROP); }}/></div>
                     <div ref={propsContainerRef}>
@@ -1435,7 +1399,6 @@ const checkRedirectResult = async () => {
                                                 np[i] = newName;
                                                 updateProp(np);
                                                 
-                                                // Modificăm cheia din documentele magazinelor din Firestore pentru păstrarea datelor introduse anterior
                                                 db.collection('magazine').get().then(snap => {
                                                     let batch = db.batch();
                                                     let modified = false;
@@ -1565,7 +1528,6 @@ const checkRedirectResult = async () => {
                     </React.Fragment>
                 } />
                 
-                {/* Selector 1/2 coloane */}
                 <div className="flex justify-between items-center px-4 mt-2">
                     <div className="flex items-center gap-1.5 p-2 px-3 bg-surface-color dark:bg-dark-surface rounded-xl shadow-sm text-text-sec text-[0.85rem] font-bold">
                         <i className="fas fa-store" style={{color: sector.culoare || '#2563eb'}}></i>
@@ -1646,7 +1608,6 @@ const checkRedirectResult = async () => {
                     snapshot.forEach(doc => {
                         list.push({ id: doc.id, ...doc.data() });
                     });
-                    // Sortare locală pentru a evita eroarea de index compus în Firestore
                     list.sort((a, b) => {
                         const tA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp || 0);
                         const tB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp || 0);
@@ -1671,7 +1632,7 @@ const checkRedirectResult = async () => {
                     const canvas = document.createElement('canvas');
                     let width = img.width;
                     let height = img.height;
-                    const MAX_SIZE = 700; // Redimensionare optimă pentru stocare eficientă în Firestore
+                    const MAX_SIZE = 700; 
                     if (width > height) {
                         if (width > MAX_SIZE) {
                             height *= MAX_SIZE / width;
@@ -1687,7 +1648,7 @@ const checkRedirectResult = async () => {
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
-                    const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82); // Compresie excelentă (~35-65 KB)
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82); 
 
                     db.collection('poze_magazine').add({
                         magazinId,
@@ -1751,7 +1712,6 @@ const checkRedirectResult = async () => {
                             </div>
                         ))}
 
-                        {/* Buton adaugă poză */}
                         <div 
                             onClick={() => document.getElementById('store_photo_file_input').click()}
                             className={`aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center p-2 cursor-pointer transition-all ${
@@ -1787,7 +1747,6 @@ const checkRedirectResult = async () => {
                     }} 
                 />
 
-                {/* Lightbox / Modal de vizualizare completă a pozei */}
                 {selectedPhoto && (
                     <div 
                         className="fixed inset-0 bg-black/95 z-[1100] flex flex-col justify-between p-4 animate-fade-in backdrop-blur-sm"
@@ -1846,7 +1805,6 @@ const checkRedirectResult = async () => {
             if(prodGrupate[p.categorie]) prodGrupate[p.categorie].push(p); 
         });
 
-        // Sortează produsele în magazin exact în ordinea specificată de user în catalogul din Setări
         Object.keys(prodGrupate).forEach(cat => {
             const catInfo = catalogCategorii[cat];
             if (catInfo && catInfo.produse) {
@@ -1909,7 +1867,6 @@ const checkRedirectResult = async () => {
                 <StorePhotosSection magazinId={magazin.id} confirmAction={confirmAction} />
 
                 <div>
-                    {/* Sortează și afișează categoriile conform ordinii dorite */}
                     {Object.entries(prodGrupate).sort(([catA], [catB]) => {
                         const orderA = catalogCategorii[catA]?.order !== undefined ? catalogCategorii[catA].order : PREFERRED_CAT_ORDER.indexOf(catA);
                         const orderB = catalogCategorii[catB]?.order !== undefined ? catalogCategorii[catB].order : PREFERRED_CAT_ORDER.indexOf(catB);
@@ -2108,7 +2065,6 @@ const checkRedirectResult = async () => {
         );
     };
 
-    // --- Sub-componentă curată pentru Rândurile de Loturi ---
     const LotRow = ({ l, isDrojdii, catObj, confirmAction, onUpdate }) => {
         const [cantitate, setCantitate] = useState(l.cantitate === 0 ? '' : l.cantitate);
         const [dataExp, setDataExp] = useState(l.dataExp || '');
@@ -2210,8 +2166,7 @@ const checkRedirectResult = async () => {
 
         const totalVitrina = loturiCurente.reduce((sum, l) => sum + (parseInt(l.cantitate)||0), 0);
         
-        // Stoc Manual & Depozit (Inițializare smart pt 0 gol)
-       const [stocMan, setStocMan] = useState(prod.stocManual !== undefined ? prod.stocManual : '');
+        const [stocMan, setStocMan] = useState(prod.stocManual !== undefined ? prod.stocManual : '');
         useEffect(() => { setStocMan(prod.stocManual !== undefined ? prod.stocManual : ''); }, [prod.stocManual]);
 
         const [depozit, setDepozit] = useState(prod.depozit || '');
@@ -2221,25 +2176,23 @@ const checkRedirectResult = async () => {
         useEffect(() => { setNotite(prod.notite || ''); }, [prod.notite]);
 
         const [newLot, setNewLot] = useState({ qty: '', data: '' });
-        const dateInputRef = useRef(null); // Referință pentru calendar input programatic
+        const dateInputRef = useRef(null);
 
         const [isSyncing, setIsSyncing] = useState(false);
 
         const saveStockToGoogleSheets = async () => {
-    // Permitem valoarea 0 explicit
-    if (stocMan === '' || stocMan === null || stocMan === undefined) {
-        alert("Introduceți o cifră validă la stoc manual înainte de a trimite.");
-        return;
-    }
+            if (stocMan === '' || stocMan === null || stocMan === undefined) {
+                alert("Introduceți o cifră validă la stoc manual înainte de a trimite.");
+                return;
+            }
 
-    if (!googleSpreadsheetId) {
-        alert("ID-ul documentului Google Sheets nu este configurat. Vă rugăm să îl adăugați mai întâi în ecranul de Setări.");
-        return;
-    }
-    
-    // ... restul codului funcției tale rămâne exact la fel în jos
-    let token = gToken;
-    if (!token) {
+            if (!googleSpreadsheetId) {
+                alert("ID-ul documentului Google Sheets nu este configurat. Vă rugăm să îl adăugați mai întâi în ecranul de Setări.");
+                return;
+            }
+            
+            let token = gToken;
+            if (!token) {
                 const confirmed = window.confirm("Pentru a înscrie stocul în Google Sheets, trebuie să te autentifici mai întâi cu contul tău Google. Dorești să te autentifici acum?");
                 if (!confirmed) return;
                 try {
@@ -2255,7 +2208,6 @@ const checkRedirectResult = async () => {
 
             try {
                 const sheetTab = googleSheetName || 'Sheet1';
-                // 1. Preluăm toate datele din tabel pentru a găsi rândul și coloana corectă
                 const rangeToFetch = `${sheetTab}!A1:ZZ500`;
                 const fetchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${googleSpreadsheetId}/values/${encodeURIComponent(rangeToFetch)}`;
                 
@@ -2287,7 +2239,6 @@ const checkRedirectResult = async () => {
                     throw new Error("Documentul selectat este gol. Adăugați denumirile produselor pe prima linie de sus.");
                 }
 
-                // 2. Căutăm coloana produsului (pe prima linie - Index 0)
                 const headerRow = values[0] || [];
                 let colIdx = -1;
                 const prodNumeNormalised = prod.nume.trim().toLowerCase();
@@ -2300,7 +2251,6 @@ const checkRedirectResult = async () => {
                     }
                 }
 
-                // Căutare secundară în caz de decalaje în primele 3 linii
                 if (colIdx === -1) {
                     for (let r = 1; r < Math.min(3, values.length); r++) {
                         const rowVals = values[r] || [];
@@ -2315,7 +2265,6 @@ const checkRedirectResult = async () => {
                     }
                 }
 
-                // 3. Căutăm rândul magazinului comparând cu adresa magazinului sau numele
                 const targetAdresa = activeMag.adresa ? activeMag.adresa.trim().toLowerCase() : '';
                 const targetNume = activeMag.nume ? activeMag.nume.trim().toLowerCase() : '';
                 
@@ -2343,7 +2292,6 @@ const checkRedirectResult = async () => {
                 }
 
                 if (rowIdx === -1) {
-                    // Dacă rândul magazinului nu este găsit, dăm posibilitatea să adăugăm rândul automat!
                     const createNewRow = window.confirm(`Magazinul "${activeMag.nume}" (${activeMag.adresa}) nu a fost găsit în tabelul Google Sheets în primele coloane.\n\nDoriți să adăugăm o linie nouă pentru acest magazin la sfârșitul tabelului (implicit coloana A: Nume, coloana B: Adresă)?`);
                     if (createNewRow) {
                         const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${googleSpreadsheetId}/values/${encodeURIComponent(sheetTab)}!A1:append?valueInputOption=USER_ENTERED`;
@@ -2377,7 +2325,6 @@ const checkRedirectResult = async () => {
                     }
                 }
 
-                // Generăm formatul datei cerut: zz.ll.aa în paranteze după numărul introdus
                 const d = new Date();
                 const zz = String(d.getDate()).padStart(2, '0');
                 const ll = String(d.getMonth() + 1).padStart(2, '0');
@@ -2386,7 +2333,6 @@ const checkRedirectResult = async () => {
 
                 const cellValueToWrite = `${stocMan} (${formatData})`;
 
-                // Convertor index coloană în literă (0->A, 25->Z, 26->AA)
                 const getColumnLetter = (col) => {
                     let letter = '';
                     while (col >= 0) {
@@ -2399,7 +2345,6 @@ const checkRedirectResult = async () => {
                 const columnLetter = getColumnLetter(colIdx);
                 const googleCellCoord = `${sheetTab}!${columnLetter}${rowIdx + 1}`;
 
-                // PUT call pentru actualizarea coordonatei exacte
                 const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${googleSpreadsheetId}/values/${encodeURIComponent(googleCellCoord)}?valueInputOption=USER_ENTERED`;
                 
                 const updateResponse = await fetch(updateUrl, {
@@ -2480,19 +2425,19 @@ const checkRedirectResult = async () => {
                             <span className="block text-[0.8rem] font-bold text-text-sec uppercase tracking-wide mb-1">Stoc (Manual)</span>
                             <div className="flex items-center justify-center gap-1 mt-1">
                                <input 
-    type="number" min="0" placeholder="0" 
-    className="w-[60%] text-center border-none bg-transparent font-black text-[1.4rem] text-text-main dark:text-white outline-none" 
-    value={stocMan} 
-    onChange={e=>setStocMan(e.target.value)} 
-    onBlur={()=>{ 
-        if (stocMan === '') return; // Permite lăsarea căsuței goale dacă o ștergi tu intenționat
-        let val = parseInt(stocMan); 
-        if(isNaN(val) || val < 0) val = 0; 
-        setStocMan(val); // Aici am corectat: acum 0 rămâne 0, nu se mai transformă în ''
-        FirebaseService.update('produse_magazin', prod.id, { stocManual: val }); 
-        triggerUpdate();
-    }} 
-/>
+                                    type="number" min="0" placeholder="0" 
+                                    className="w-[60%] text-center border-none bg-transparent font-black text-[1.4rem] text-text-main dark:text-white outline-none" 
+                                    value={stocMan} 
+                                    onChange={e=>setStocMan(e.target.value)} 
+                                    onBlur={()=>{ 
+                                        if (stocMan === '') return;
+                                        let val = parseInt(stocMan); 
+                                        if(isNaN(val) || val < 0) val = 0; 
+                                        setStocMan(val);
+                                        FirebaseService.update('produse_magazin', prod.id, { stocManual: val }); 
+                                        triggerUpdate();
+                                    }} 
+                                />
                                 <button 
                                     onClick={saveStockToGoogleSheets} 
                                     disabled={isSyncing}
@@ -2671,7 +2616,6 @@ const checkRedirectResult = async () => {
                 {view.page === PAGES.STORE && <StorePage />}
                 {view.page === PAGES.PRODUCT && <ProductPage />}
 
-                {/* GLOBAL MODALS (Prompt, Confirm, Editare globală rețea) */}
                 <BaseModal isOpen={modal.type === MODAL_TYPES.EDIT_RET} title="Editează Rețea">
                     <Input placeholder="Nume" value={editRetState.nume} onChange={e=>setEditRetState({...editRetState, nume:e.target.value})} />
                     <Input type="color" value={editRetState.culoare} onChange={e=>setEditRetState({...editRetState, culoare:e.target.value})} className="!h-[50px] !p-[3px] cursor-pointer" />
