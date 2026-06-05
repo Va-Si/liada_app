@@ -348,7 +348,14 @@
         const result = await firebase.auth().signInWithPopup(provider);
         
         // Modul corect de extragere a token-ului în Firebase v8/Compat:
+        const result = await firebase.auth().signInWithPopup(provider);
+        
+        // --- AICI INSEREZI CODUL DE DEBUG ---
+        console.log("Rezultat complet de la Google:", result);
         const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+        console.log("Obiectul credential:", credential);
+        // -------------------------------------
+        
         const token = credential ? credential.accessToken : null;
 
         if (token) {
