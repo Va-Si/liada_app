@@ -342,19 +342,17 @@
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.addScope('https://www.googleapis.com/auth/spreadsheets');
         
-        // Forțăm selectarea contului pentru a evita blocajele de cache
-       provider.setCustomParameters({ prompt: 'consent' });
+        // Forțăm deschiderea ferestrei de permisiuni din nou
+        provider.setCustomParameters({ prompt: 'consent' });
 
+        // Aici am lăsat o singură dată "const result"
         const result = await firebase.auth().signInWithPopup(provider);
         
-        // Modul corect de extragere a token-ului în Firebase v8/Compat:
-        const result = await firebase.auth().signInWithPopup(provider);
-        
-        // --- AICI INSEREZI CODUL DE DEBUG ---
+        // --- COD DE DEBUG ---
         console.log("Rezultat complet de la Google:", result);
         const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
         console.log("Obiectul credential:", credential);
-        // -------------------------------------
+        // --------------------
         
         const token = credential ? credential.accessToken : null;
 
@@ -363,19 +361,15 @@
             localStorage.setItem('g_access_token', token);
             return token;
         } else {
-            alert("Nu s-a putut obține permisiunea pentru Google Sheets.");
+            console.warn("Token-ul este null. Verifică în consolă ce scrie la 'Obiectul credential'.");
+            alert("Nu s-a putut obține permisiunea pentru Google Sheets. Verifică în consolă (F12) erorile.");
             return null;
         }
     } catch (err) {
         console.error("Autentificare Google eșuată:", err);
-        
-        // Alerte specifice care te vor ajuta să depistezi exact problema dacă fereastra tot nu se deschide
-        if (err.code === 'auth/operation-not-supported-in-this-environment') {
-            alert("Eroare: Autentificarea Google nu funcționează dacă deschizi fișierul direct (file://). Folosește un server local (ex: extensia Live Server din VS Code).");
-        } else if (err.code === 'auth/provider-not-enabled') {
-            alert("Eroare: Autentificarea cu Google nu este activată! Mergi în Firebase Console -> Authentication -> Sign-in method și activează 'Google'.");
-        } else if (err.code === 'auth/popup-blocked') {
-            alert("Eroare: Browser-ul a blocat fereastra pop-up. Te rog să permiți pop-up-urile pentru acest site.");
+        // Alerte specifice
+        if (err.code === 'auth/popup-blocked') {
+            alert("Eroare: Browser-ul a blocat fereastra pop-up.");
         } else {
             alert("Eroare la conectare: " + err.message);
         }
