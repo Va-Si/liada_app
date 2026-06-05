@@ -109,7 +109,7 @@
     // ==========================================
     const Helpers = {
         convertDataToTime: (dateStr) => {
-            if(!dateStr || dateStr === "Dată invalidă" || dateStr === "Calculată") return new Date(8640000000000000).getTime();
+            if(!dateStr || dateStr === "Dată invalidă" || dateStr === "Calculată" || dateStr === "N/A") return new Date(8640000000000000).getTime();
             let parts = dateStr.split('.'); if(parts.length !== 3) return new Date(8640000000000000).getTime();
             return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
         },
@@ -128,16 +128,24 @@
             
             return `${String(prodDate.getDate()).padStart(2, '0')}.${String(prodDate.getMonth() + 1).padStart(2, '0')}.${prodDate.getFullYear()}`;
         },
-        sortByOrder: (arr) => arr.sort((a,b) => (a.order ?? a.timestamp?.toMillis() ?? 0) - (b.order ?? b.timestamp?.toMillis() ?? 0)),
+        sortByOrder: (arr) => {
+            return [...arr].sort((a, b) => {
+                const orderA = a.order !== undefined ? a.order : (a.timestamp?.toMillis ? a.timestamp.toMillis() : 0);
+                const orderB = b.order !== undefined ? b.order : (b.timestamp?.toMillis ? b.timestamp.toMillis() : 0);
+                return orderA - orderB;
+            });
+        },
         initSortable: (container, dataRef, collectionName) => {
             return new Sortable(container, {
                 animation: 150, delay: 200, delayOnTouchOnly: true, touchStartThreshold: 5, ghostClass: 'sortable-ghost',
                 onEnd: (evt) => {
                     const newOrder = [...dataRef.current];
-                    const moved = newOrder.splice(evt.oldIndex, 1)[0];
-                    newOrder.splice(evt.newIndex, 0, moved);
-                    const updates = newOrder.map((item, idx) => ({ id: item.id, data: { order: idx } }));
-                    FirebaseService.batchUpdate(collectionName, updates);
+                    if (evt.oldIndex !== undefined && evt.newIndex !== undefined) {
+                      const moved = newOrder.splice(evt.oldIndex, 1)[0];
+                      newOrder.splice(evt.newIndex, 0, moved);
+                      const updates = newOrder.map((item, idx) => ({ id: item.id, data: { order: idx } }));
+                      FirebaseService.batchUpdate(collectionName, updates);
+                    }
                 }
             });
         }
@@ -235,10 +243,10 @@
         // Firebase Sync
         useEffect(() => {
             let loads = 0; const checkReady = () => { loads++; if(loads === 4) setTimeout(() => setIsReady(true), 300); };
-            const u1 = db.collection('sectoare').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbSectoare(obj); checkReady(); });
-            const u2 = db.collection('magazine').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbMagazine(obj); checkReady(); });
-            const u3 = db.collection('produse_magazin').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbProduse(obj); checkReady(); });
-            const u4 = db.collection('loturi').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbLoturi(obj); checkReady(); });
+            const u1 = db.collection('sectoare').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbSectoare(obj); checkReady(); }, err => console.error(err));
+            const u2 = db.collection('magazine').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbMagazine(obj); checkReady(); }, err => console.error(err));
+            const u3 = db.collection('produse_magazin').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbProduse(obj); checkReady(); }, err => console.error(err));
+            const u4 = db.collection('loturi').onSnapshot(s => { let obj={}; s.forEach(d => obj[d.id] = {id: d.id, ...d.data()}); setDbLoturi(obj); checkReady(); }, err => console.error(err));
             return () => { u1(); u2(); u3(); u4(); };
         }, []);
 
@@ -289,7 +297,7 @@
 
     // --- Componentă Expirări Reutilizabilă ---
     const ExpirariBox = ({ type, data }) => {
-        const { dbSectoare, dbMagazine, dbProduse, dbLoturi, expConfigs, updateExpConfig, setView } = useApp();
+        const { dbSectoare, dbMagazine, dbProduse, dbLoturi, expConfigs, updateExpConfig, setView, catalogCategorii } = useApp();
         const config = expConfigs[type];
         const [val, setVal] = useState(config.val === 0 ? '' : config.val);
         const [unit, setUnit] = useState(config.unit);
@@ -308,22 +316,33 @@
         const items = useMemo(() => {
             let arr = []; let msAzi = new Date().setHours(0,0,0,0);
             for(let lotId in dbLoturi) {
-                let lot = dbLoturi[lotId]; let expTime = Helpers.convertDataToTime(lot.dataExp);
-                if(expTime > 8000000000000000) continue; 
-                let zileRamase = Math.round((expTime - msAzi) / (1000 * 3600 * 24));
-                
+                let lot = dbLoturi[lotId]; 
                 let prod = dbProduse[lot.produsId]; if(!prod) continue;
                 let mag = dbMagazine[prod.magazinId]; if(!mag) continue;
                 let sec = dbSectoare[mag.sectorId]; if(!sec) continue;
 
+                let isDrojdii = prod.categorie === 'Drojdii';
+                let lotDataExp = lot.dataExp;
+                if (!isDrojdii && lot.dataProd && lot.dataProd !== "N/A") {
+                    let catObj = catalogCategorii[prod.categorie];
+                    let expCalc = Helpers.calculeazaExpirare(lot.dataProd, catObj);
+                    if (expCalc !== "Dată invalidă") {
+                        lotDataExp = expCalc;
+                    }
+                }
+
+                let expTime = Helpers.convertDataToTime(lotDataExp);
+                if(expTime > 8000000000000000) continue; 
+                let zileRamase = Math.round((expTime - msAzi) / (1000 * 3600 * 24));
+
                 if (zileRamase <= zileMaxime) {
-                    if (type === 'global' || (type === 'sector' && data.currentSectorId === sec.id) || (type === 'store' && data.currentStoreId === mag.id)) {
-                        arr.push({ lot, prod, mag, sec, zile: zileRamase });
+                    if (type === 'global' || (type === 'sector' && data?.currentSectorId === sec.id) || (type === 'store' && data?.currentStoreId === mag.id)) {
+                        arr.push({ lot: { ...lot, dataExp: lotDataExp }, prod, mag, sec, zile: zileRamase });
                     }
                 }
             }
             return arr.sort((a, b) => a.zile - b.zile);
-        }, [dbSectoare, dbMagazine, dbProduse, dbLoturi, zileMaxime, type, data?.currentSectorId, data?.currentStoreId]);
+        }, [dbSectoare, dbMagazine, dbProduse, dbLoturi, zileMaxime, type, data, catalogCategorii]);
 
         return (
             <Card className="!border-[1.5px] !border-danger !shadow-lg">
@@ -392,7 +411,7 @@
                 const sortable = Helpers.initSortable(containerRef.current, dataRef, 'sectoare');
                 return () => sortable.destroy();
             }
-        }, []);
+        }, [arrSectoare.length]);
 
         const handleSave = () => {
             if(newSect.nume) { FirebaseService.add('sectoare', { ...newSect, order: arrSectoare.length }); closeModal(); }
@@ -469,7 +488,7 @@
                 </Card>
 
                 <Card>
-                    <div className="flex justify-between items-center font-bold text-[1.1rem] mb-2">Produse & Valabilitate <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-50 dark:!bg-blue-900/30 !rounded-full" onClick={() => promptAction("Categorie Nouă", "", "Ex: Dulciuri", (n) => { if(!catalogCategorii[n]){ updateCatalog({...catalogCategorii, [n]: {termen: 30, unit: 'zile', produse: []}}); } })}/></div>
+                    <div className="flex justify-between items-center font-bold text-[1.1rem] mb-2">Produse & Valabilitate <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-50 dark:!bg-blue-900/30 !rounded-full" onClick={() => promptAction("Categorie Nouă", "", "Ex: Dulciuri", (n) => { if(n && !catalogCategorii[n]){ updateCatalog({...catalogCategorii, [n]: {termen: 30, unit: 'zile', produse: []}}); } })}/></div>
                     <div className="mt-3">
                         {Object.entries(catalogCategorii).map(([catName, catData]) => {
                             const isDrojdii = catName === 'Drojdii';
@@ -500,7 +519,7 @@
                                                 </div>
                                             </CardRow>
                                         ))}
-                                        <button onClick={() => promptAction(`Adaugă în ${catName}`, "", "Nume produs", (n) => { let c={...catalogCategorii}; c[catName].produse.push(n); updateCatalog(c); })} className="bg-blue-50 dark:bg-blue-900/30 border-none text-accent font-bold rounded-xl p-3 mt-2 w-full text-center cursor-pointer"><i className="fas fa-plus mr-1"></i> Adaugă Produs</button>
+                                        <button onClick={() => promptAction(`Adaugă în ${catName}`, "", "Nume produs", (n) => { if(n){ let c={...catalogCategorii}; c[catName].produse.push(n); updateCatalog(c); } })} className="bg-blue-50 dark:bg-blue-900/30 border-none text-accent font-bold rounded-xl p-3 mt-2 w-full text-center cursor-pointer"><i className="fas fa-plus mr-1"></i> Adaugă Produs</button>
                                     </div>
                                 </Card>
                             )
@@ -546,7 +565,7 @@
                 const sortable = Helpers.initSortable(containerRef.current, dataRef, 'magazine');
                 return () => sortable.destroy();
             }
-        }, [columns]);
+        }, [columns, magSect.length]);
 
         return (
             <div className="animate-fade-in pb-[100px]">
@@ -832,16 +851,18 @@
         const isDrojdii = prod.categorie === 'Drojdii';
         const catObj = catalogCategorii[prod.categorie];
         
-        const loturiCurente = Object.values(dbLoturi).filter(l => l.produsId === prod.id).map(lot => {
-            let l = {...lot};
-            if(!isDrojdii) {
-                let expCalc = Helpers.calculeazaExpirare(l.dataProd, catObj);
-                if(l.dataExp !== expCalc && expCalc !== "Dată invalidă") {
-                    FirebaseService.update("loturi", l.id, { dataExp: expCalc }); l.dataExp = expCalc;
+        const loturiCurente = useMemo(() => {
+            return Object.values(dbLoturi).filter(l => l.produsId === prod.id).map(lot => {
+                let l = {...lot};
+                if(!isDrojdii && l.dataProd && l.dataProd !== "N/A") {
+                    let expCalc = Helpers.calculeazaExpirare(l.dataProd, catObj);
+                    if(expCalc !== "Dată invalidă") {
+                        l.dataExp = expCalc;
+                    }
                 }
-            }
-            return l;
-        }).sort((a,b) => Helpers.convertDataToTime(a.dataExp) - Helpers.convertDataToTime(b.dataExp));
+                return l;
+            }).sort((a,b) => Helpers.convertDataToTime(a.dataExp) - Helpers.convertDataToTime(b.dataExp));
+        }, [dbLoturi, prod.id, isDrojdii, catObj]);
 
         const totalVitrina = loturiCurente.reduce((sum, l) => sum + (parseInt(l.cantitate)||0), 0);
         
@@ -1040,7 +1061,8 @@
                     <div className="flex gap-3 pt-5">
                         <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
                         <PrimaryButton onClick={()=>{
-                            let val = document.getElementById('prompt-input').value.trim();
+                            let inputEl = document.getElementById('prompt-input');
+                            let val = inputEl ? inputEl.value.trim() : '';
                             if(modal.data?.onSave) modal.data.onSave(val); 
                             closeModal();
                         }}>Salvează</PrimaryButton>
