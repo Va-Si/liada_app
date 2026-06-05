@@ -337,33 +337,37 @@
             return () => unsubAuth();
         }, []);
 
-      import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth"; // Adaugă asta sus în fișier
-
-const gSignIn = async () => {
+     const gSignIn = async () => {
     try {
-        const auth = getAuth(app);
-        const provider = new GoogleAuthProvider();
+        // Folosim obiectul global 'firebase' care există deja în pagina ta
+        const provider = new firebase.auth.GoogleAuthProvider();
         
-        // 1. Aici adăugăm scope-ul (permisiunea pentru Sheets)
+        // Cerem permisiunea pentru Sheets
         provider.addScope('https://www.googleapis.com/auth/spreadsheets');
+        
+        // Forțăm fereastra de permisiuni
         provider.setCustomParameters({ prompt: 'consent' });
 
-        // 2. Autentificarea v9
-        const result = await signInWithPopup(auth, provider);
+        // Autentificare
+        const result = await firebase.auth().signInWithPopup(provider);
         
-        // 3. Extragerea token-ului
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        const token = credential.accessToken;
+        // Extragerea token-ului
+        const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+        const token = credential ? credential.accessToken : null;
 
         if (token) {
+            setGToken(token);
             localStorage.setItem('g_access_token', token);
+            console.log("Token obținut!");
             return token;
         } else {
-            throw new Error("Token-ul este gol");
+            console.warn("Google nu a trimis accesul pentru Sheets.");
+            alert("Nu s-a putut obține permisiunea pentru Google Sheets. Verifică Consola.");
+            return null;
         }
     } catch (err) {
-        console.error("Eroare:", err);
-        alert("Eroare la conectare: " + err.message);
+        console.error("Autentificare eșuată:", err);
+        alert("Eroare: " + err.message);
         return null;
     }
 };
