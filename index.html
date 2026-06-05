@@ -337,40 +337,39 @@
             return () => unsubAuth();
         }, []);
 
-     const gSignIn = async () => {
+    const gSignIn = async () => {
     try {
-        // Folosim obiectul global 'firebase' care există deja în pagina ta
         const provider = new firebase.auth.GoogleAuthProvider();
-        
-        // Cerem permisiunea pentru Sheets
         provider.addScope('https://www.googleapis.com/auth/spreadsheets');
-        
-        // Forțăm fereastra de permisiuni
         provider.setCustomParameters({ prompt: 'consent' });
 
-        // Autentificare
-        const result = await firebase.auth().signInWithPopup(provider);
-        
-        // Extragerea token-ului
-        const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
-        const token = credential ? credential.accessToken : null;
-
-        if (token) {
-            setGToken(token);
-            localStorage.setItem('g_access_token', token);
-            console.log("Token obținut!");
-            return token;
-        } else {
-            console.warn("Google nu a trimis accesul pentru Sheets.");
-            alert("Nu s-a putut obține permisiunea pentru Google Sheets. Verifică Consola.");
-            return null;
-        }
+        // În loc de popup, redirecționăm pagina. Este mult mai sigur și nu se blochează!
+        await firebase.auth().signInWithRedirect(provider);
     } catch (err) {
-        console.error("Autentificare eșuată:", err);
-        alert("Eroare: " + err.message);
-        return null;
+        console.error("Eroare la redirect:", err);
+        alert("Eroare la conectare: " + err.message);
     }
 };
+        // Această funcție trebuie să ruleze când se încarcă pagina
+const checkRedirectResult = async () => {
+    try {
+        const result = await firebase.auth().getRedirectResult();
+        if (result && result.credential) {
+            const token = result.credential.accessToken;
+            if (token) {
+                setGToken(token);
+                localStorage.setItem('g_access_token', token);
+                console.log("Succes! Token obținut după redirect:", token);
+                alert("Te-ai conectat cu succes!");
+            }
+        }
+    } catch (err) {
+        console.error("Eroare la primirea rezultatului:", err);
+    }
+};
+
+// APELEAZĂ ASTA LA ÎNCĂRCAREA PAGINII (dacă folosești React useEffect sau un script care pornește la onload)
+// checkRedirectResult();
         const gSignOut = async () => {
             try {
                 await firebase.auth().signOut();
