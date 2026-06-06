@@ -724,11 +724,7 @@ input[type="number"] {
         const dataRef = useRef(arrSectoare);
         dataRef.current = arrSectoare;
         const [newSect, setNewSect] = useState({ nume: '', culoare: CONFIG.COLORS.DEFAULT_SECTOR });
-        const [tempStoc, setTempStoc] = useState(stocMan.toString());
-        // 2. Adaugă acest useEffect pentru a sincroniza dacă stocMan se schimbă din altă parte
-useEffect(() => {
-    setTempStoc(stocMan.toString());
-}, [stocMan]);
+       
 
         useEffect(() => {
             if (containerRef.current) {
@@ -2552,8 +2548,20 @@ useEffect(() => {
         const totalVitrina = loturiCurente.reduce((sum, l) => sum + (parseInt(l.cantitate)||0), 0);
         
         // Stoc Manual & Depozit (Inițializare smart pt 0 gol)
-       const [stocMan, setStocMan] = useState(prod.stocManual !== undefined ? prod.stocManual : '');
-        useEffect(() => { setStocMan(prod.stocManual === 0 ? '' : (prod.stocManual || '')); }, [prod.stocManual]);
+      // 1. State-urile necesare
+const [stocMan, setStocMan] = useState(prod.stocManual !== undefined ? prod.stocManual : '');
+const [tempStoc, setTempStoc] = useState(stocMan.toString());
+
+// 2. useEffect-ul tău original (Modificat doar puțin ca să accepte "0" ca text)
+useEffect(() => { 
+    // În loc de '', punem "0" ca string pentru a preveni "golirea" inputului
+    setStocMan(prod.stocManual === 0 ? "0" : (prod.stocManual || "0")); 
+}, [prod.stocManual]);
+
+// 3. Noul useEffect (Face legătura între stocMan și tempStoc)
+useEffect(() => {
+    setTempStoc(stocMan.toString());
+}, [stocMan]);
 
         const [depozit, setDepozit] = useState(prod.depozit || '');
         useEffect(() => { setDepozit(prod.depozit || ''); }, [prod.depozit]);
@@ -2967,24 +2975,23 @@ useEffect(() => {
                         <div className="bg-bg-color dark:bg-dark-bg p-3 rounded-xl text-center border border-border-color dark:border-dark-border shadow-sm">
                             <span className="block text-[0.8rem] font-bold text-text-sec uppercase tracking-wide mb-1">Stoc (Manual)</span>
                             <div className="flex items-center justify-center gap-1 mt-1">
-                              <input 
+                             <input 
     type="number" 
     min="0" 
     placeholder="0" 
-    // Folosim tempStoc pentru valoarea din input
     value={tempStoc} 
-    
-    // Doar actualizăm starea locală, FĂRĂ să trimitem la Firebase (asta previne flicker-ul)
     onChange={(e) => setTempStoc(e.target.value)} 
-    
-    // Abia la Blur, când ai terminat de scris, trimitem la Firebase
-    onBlur={() => {
-        let val = parseInt(tempStoc);
+    onBlur={(e) => {
+        // Conversie sigură
+        let val = parseInt(e.target.value);
         if (isNaN(val) || val < 0) val = 0;
         
-        // Acum trimitem la Firebase
+        // Trimite la Firebase
         FirebaseService.update('produse_magazin', prod.id, { stocManual: val });
-        triggerUpdate(); // Abia acum re-randăm totul
+        
+        // TriggerUpdate re-randează componenta, ceea ce va activa 
+        // useEffect-ul tău original și apoi cel nou, sincronizând totul perfect.
+        triggerUpdate();
     }}
     className="w-[60%] text-center border-none bg-transparent font-black text-[1.4rem] text-text-main dark:text-white outline-none" 
 />
