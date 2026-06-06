@@ -1431,33 +1431,167 @@
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(data.sheetName || "Sheet1");
     if (!sheet) return ContentService.createTextOutput(JSON.stringify({error: "Fila " + (data.sheetName || "Sheet1") + " este inexistenta"})).setMimeType(ContentService.MimeType.JSON);
     var rows = sheet.getDataRange().getValues();
-    var headerRow = rows[0] || [];
+    if (rows.length === 0) return ContentService.createTextOutput(JSON.stringify({error: "Documentul selectat este gol."})).setMimeType(ContentService.MimeType.JSON);
+
+    // Funcție robustă de normalizare (elimină diacritice, spații, puncte etc.)
+    var clean = function(str) {
+      if (!str) return "";
+      return String(str)
+        .toLowerCase()
+        .replace(/[ăâ]/g, "a")
+        .replace(/[î]/g, "i")
+        .replace(/[ș]/g, "s")
+        .replace(/[ț]/g, "t")
+        .replace(/[^a-z0-9]/g, "");
+    };
+
+    var prodNumeClean = clean(data.prodNume);
+    var magAdresaClean = clean(data.magAdresa);
+    var magNumeClean = clean(data.magNume);
+
+    // 1. Căutăm produsul în rândul 2 (index 1) cu fallback la rândul 1 (index 0).
+    // Deoarece coloana A (index 0) conține numele magazinului și coloana B (index 1) conține adresa,
+    // produsele sunt amplasate obligatoriu începând de la coloana C (index 2).
+    // Deși începem căutarea de la indexul 2, folosim și o listă de cuvinte de ignorat pentru un plus de siguranță.
     var colIdx = -1;
-    var prodNume = data.prodNume.trim().toLowerCase();
-    for (var c = 0; c < headerRow.length; c++) {
-      var hVal = String(headerRow[c]).trim().toLowerCase();
-      if (hVal === prodNume || hVal.indexOf(prodNume) !== -1 || prodNume.indexOf(hVal) !== -1) { colIdx = c; break; }
-    }
-    if (colIdx === -1) return ContentService.createTextOutput(JSON.stringify({error: "Nu exista coloana pt produs: " + data.prodNume})).setMimeType(ContentService.MimeType.JSON);
-    var rowIdx = -1;
-    var targetNume = data.magNume ? data.magNume.trim().toLowerCase() : "";
-    var targetAdresa = data.magAdresa ? data.magAdresa.trim().toLowerCase() : "";
-    for (var r = 0; r < rows.length; r++) {
-      var row = rows[r];
-      for (var c = 0; c < Math.min(4, row.length); c++) {
-        var cellVal = String(row[c]).trim().toLowerCase();
-        if (targetAdresa && (cellVal === targetAdresa || cellVal.indexOf(targetAdresa) !== -1)) { rowIdx = r; break; }
-        if (targetNume && (cellVal === targetNume || cellVal.indexOf(targetNume) !== -1)) { rowIdx = r; break; }
+    var productRow = rows[1] || rows[0] || [];
+    
+    var isIgnoredColumn = function(text) {
+      if (!text) return true;
+      var cleanCol = clean(text);
+      var ignored = ["magazin", "adresa", "nume", "nr", "crt", "index", "id", "localitate", "judet", "route", "telefon", "cod", "client", "mag", "adr"];
+      for (var i = 0; i < ignored.length; i++) {
+        if (cleanCol === ignored[i] || cleanCol.indexOf(ignored[i]) !== -1) return true;
       }
-      if (rowIdx !== -1) break;
+      return false;
+    };
+
+    // Pasul 1: Căutăm potrivire EXACTĂ a numelui de produs (de la coloana C încolo, index 2)
+    for (var c = 2; c < productRow.length; c++) {
+      var cellVal = clean(productRow[c]);
+      if (cellVal && !isIgnoredColumn(productRow[c]) && cellVal === prodNumeClean) {
+        colIdx = c;
+        break;
+      }
     }
-    if (rowIdx === -1) {
+
+    // Pasul 2: Căutăm potrivire PARȚIALĂ robustă (de la coloana C încolo, index 2)
+    if (colIdx === -1) {
+      for (var c = 2; c < productRow.length; c++) {
+        var cellVal = clean(productRow[c]);
+        if (cellVal && !isIgnoredColumn(productRow[c])) {
+          // Permitem potriviri doar dacă lungimile ambelor șiruri sunt de cel puțin 3 caractere relevate pentru a preveni coliziuni greșite
+          if (cellVal.length >= 3 && prodNumeClean.length >= 3) {
+            if (cellVal.indexOf(prodNumeClean) !== -1 || prodNumeClean.indexOf(cellVal) !== -1) {
+              colIdx = c;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback secundar pe primul rând (index 0), căutând tot de la coloana C (index 2) încolo
+    if (colIdx === -1 && rows[0]) {
+      var firstRow = rows[0];
+      for (var c = 2; c < firstRow.length; c++) {
+        var cellVal = clean(firstRow[c]);
+        if (cellVal && !isIgnoredColumn(firstRow[c]) && cellVal === prodNumeClean) {
+          colIdx = c;
+          break;
+        }
+      }
+      if (colIdx === -1) {
+        for (var c = 2; c < firstRow.length; c++) {
+          var cellVal = clean(firstRow[c]);
+          if (cellVal && !isIgnoredColumn(firstRow[c]) && cellVal.length >= 3 && prodNumeClean.length >= 3) {
+            if (cellVal.indexOf(prodNumeClean) !== -1 || prodNumeClean.indexOf(cellVal) !== -1) {
+              colIdx = c;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback extrem: dacă nu se găsește deloc din coloana C (index 2), dar cumva se găsește pe coloana B (index 1) o potrivire perfectă și doar dacă aceasta nu conține cuvinte de ignorat
+    if (colIdx === -1 && productRow.length > 1) {
+      var cellVal = clean(productRow[1]);
+      if (cellVal && !isIgnoredColumn(productRow[1]) && cellVal === prodNumeClean) {
+        colIdx = 1;
+      }
+    }
+
+    if (colIdx === -1) {
+      return ContentService.createTextOutput(JSON.stringify({error: "Nu am găsit produsul în antetul coloanelor din Google Sheets: " + data.prodNume})).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 2. Căutăm magazinul începând de la rândul 3 (index 2) pentru a nu confunda cu antetele rândurilor 1 sau 2
+    var rowIdx = -1;
+    var bestRowIdx = -1;
+    var bestScore = 0;
+
+    for (var r = 2; r < rows.length; r++) {
+      var currentRow = rows[r] || [];
+      var cellNume = clean(currentRow[0] || "");
+      var cellAddr = clean(currentRow[1] || "");
+
+      var currentScore = 0;
+
+      // Verificăm potrivirea pe adresa magazinului (prioritate maximă)
+      if (magAdresaClean && cellAddr) {
+        if (cellAddr === magAdresaClean) {
+          currentScore += 80; // Potrivire perfectă pe adresă
+        } else if (cellAddr.length >= 4 && magAdresaClean.length >= 4) {
+          if (cellAddr.indexOf(magAdresaClean) !== -1 || magAdresaClean.indexOf(cellAddr) !== -1) {
+            currentScore += 40; // Potrivire parțială suficient de lungă pe adresă
+          }
+        }
+      }
+
+      // Verificăm potrivirea pe numele magazinului
+      if (magNumeClean && cellNume) {
+        if (cellNume === magNumeClean) {
+          currentScore += 50; // Potrivire perfectă pe nume
+        } else if (cellNume.length >= 4 && magNumeClean.length >= 4) {
+          if (cellNume.indexOf(magNumeClean) !== -1 || magNumeClean.indexOf(cellNume) !== -1) {
+            if (cellNume === "linella") {
+              currentScore += 5; // Pentru a evita potriviri greșite automate pe cuvântul generic "linella"
+            } else {
+              currentScore += 20; // Potrivire parțială pe nume
+            }
+          }
+        }
+      }
+
+      // Bonus major dacă se potrivesc și numele și adresa
+      if (magAdresaClean && cellAddr && magNumeClean && cellNume) {
+        if (
+          (cellAddr === magAdresaClean || cellAddr.indexOf(magAdresaClean) !== -1 || magAdresaClean.indexOf(cellAddr) !== -1) &&
+          (cellNume === magNumeClean || cellNume.indexOf(magNumeClean) !== -1 || magNumeClean.indexOf(cellNume) !== -1)
+        ) {
+          currentScore += 50;
+        }
+      }
+
+      if (currentScore > bestScore && currentScore >= 15) {
+        bestScore = currentScore;
+        bestRowIdx = r;
+      }
+    }
+
+    if (bestRowIdx !== -1) {
+      rowIdx = bestRowIdx;
+    } else {
+      // Dacă magazinul nu a fost găsit deloc, adăugăm o linie nouă: Magazinul în A, Adresa în B
       sheet.appendRow([data.magNume, data.magAdresa]);
       rows = sheet.getDataRange().getValues();
       rowIdx = rows.length - 1;
     }
+
+    // Înscriem stocul la intersecție
     sheet.getRange(rowIdx + 1, colIdx + 1).setValue(data.stocMan + " (" + data.dateStr + ")");
-    return ContentService.createTextOutput(JSON.stringify({success:true, cell: ""+(rowIdx+1)+","+(colIdx+1)})).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({success: true, row: rowIdx + 1, col: colIdx + 1})).setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
     return ContentService.createTextOutput(JSON.stringify({error: err.toString()})).setMimeType(ContentService.MimeType.JSON);
   }
@@ -2528,73 +2662,171 @@
                 const values = data.values || [];
 
                 if (values.length === 0) {
-                    throw new Error("Documentul selectat este gol. Adăugați denumirile produselor pe prima linie de sus.");
+                    throw new Error("Documentul este gol.");
                 }
 
-                // 2. Căutăm coloana produsului (pe prima linie - Index 0)
-                const headerRow = values[0] || [];
-                let colIdx = -1;
-                const prodNumeNormalised = prod.nume.trim().toLowerCase();
+                // Funcție robustă de normalizare (elimină diacritice, spații, puncte etc.)
+                const clean = (str) => {
+                    if (!str) return '';
+                    return str.toString()
+                        .toLowerCase()
+                        .normalize('NFD') // Descompune diacriticele (de ex. ș -> s + diacritic)
+                        .replace(/[\u0300-\u036f]/g, '') // Elimină accentele/diacriticele rezultate
+                        .replace(/[ăâ]/g, 'a')
+                        .replace(/[î]/g, 'i')
+                        .replace(/[ș]/g, 's')
+                        .replace(/[ț]/g, 't')
+                        .replace(/[^a-z0-9]/g, ''); // Elimină orice semn de punctuație sau spațiu
+                };
 
-                for (let c = 0; c < headerRow.length; c++) {
-                    const headerCell = (headerRow[c] || '').toString().trim().toLowerCase();
-                    if (headerCell === prodNumeNormalised || headerCell.includes(prodNumeNormalised) || prodNumeNormalised.includes(headerCell)) {
+                const prodNumeClean = clean(prod.nume);
+                const magAdresaClean = clean(activeMag.adresa);
+                const magNumeClean = clean(activeMag.nume);
+
+                // 2. Căutăm coloana produsului în rândul 2 (index 1), cu fallback la rândul 1 (index 0).
+                // Deoarece coloana A (index 0) conține numele magazinului și coloana B (index 1) conține adresa,
+                // produsele sunt amplasate obligatoriu începând de la coloana C (index 2).
+                // Deși începem căutarea de la indexul 2, folosim și o listă de cuvinte de ignorat pentru un plus de siguranță.
+                let colIdx = -1;
+                const productRow = values[1] || values[0] || [];
+
+                const isIgnoredColumn = (text) => {
+                    if (!text) return true;
+                    const cleanCol = clean(text);
+                    const ignored = ["magazin", "adresa", "nume", "nr", "crt", "index", "id", "localitate", "judet", "route", "telefon", "cod", "client", "mag", "adr"];
+                    return ignored.some(keyword => cleanCol === keyword || cleanCol.includes(keyword));
+                };
+
+                // Pasul 1: Căutăm potrivire EXACTĂ a numelui de produs (de la coloana C încolo, index 2)
+                for (let c = 2; c < productRow.length; c++) {
+                    const cellVal = clean(productRow[c]);
+                    if (cellVal && !isIgnoredColumn(productRow[c]) && cellVal === prodNumeClean) {
                         colIdx = c;
                         break;
                     }
                 }
 
-                // Căutare secundară în caz de decalaje în primele 3 linii
+                // Pasul 2: Căutăm potrivire PARȚIALĂ robustă (de la coloana C încolo, index 2)
                 if (colIdx === -1) {
-                    for (let r = 1; r < Math.min(3, values.length); r++) {
-                        const rowVals = values[r] || [];
-                        for (let c = 0; c < rowVals.length; c++) {
-                            const val = (rowVals[c] || '').toString().trim().toLowerCase();
-                            if (val === prodNumeNormalised) {
-                                colIdx = c;
-                                break;
+                    for (let c = 2; c < productRow.length; c++) {
+                        const cellVal = clean(productRow[c]);
+                        if (cellVal && !isIgnoredColumn(productRow[c])) {
+                            // Permitem potriviri doar dacă lungimile ambelor șiruri sunt de cel puțin 3 caractere relevate pentru a preveni coliziuni greșite
+                            if (cellVal.length >= 3 && prodNumeClean.length >= 3) {
+                                if (cellVal.includes(prodNumeClean) || prodNumeClean.includes(cellVal)) {
+                                    colIdx = c;
+                                    break;
+                                }
                             }
                         }
-                        if (colIdx !== -1) break;
                     }
                 }
 
-                // 3. Căutăm rândul magazinului comparând cu adresa magazinului sau numele
-                const targetAdresa = activeMag.adresa ? activeMag.adresa.trim().toLowerCase() : '';
-                const targetNume = activeMag.nume ? activeMag.nume.trim().toLowerCase() : '';
-                
-                let rowIdx = -1;
-                for (let r = 0; r < values.length; r++) {
-                    const currentRow = values[r] || [];
-                    for (let c = 0; c < Math.min(4, currentRow.length); c++) {
-                        const cellVal = (currentRow[c] || '').toString().trim().toLowerCase();
-                        if (targetAdresa && (cellVal === targetAdresa || cellVal.includes(targetAdresa) || targetAdresa.includes(cellVal))) {
-                            rowIdx = r;
-                            break;
-                        }
-                        if (targetNume && (cellVal === targetNume || cellVal.includes(targetNume) || targetNume.includes(cellVal))) {
-                            rowIdx = r;
+                // Fallback secundar pe primul rând (index 0), căutând tot de la coloana C (index 2) încolo
+                if (colIdx === -1 && values[0]) {
+                    const fallbackRow = values[0];
+                    for (let c = 2; c < fallbackRow.length; c++) {
+                        const cellVal = clean(fallbackRow[c]);
+                        if (cellVal && !isIgnoredColumn(fallbackRow[c]) && cellVal === prodNumeClean) {
+                            colIdx = c;
                             break;
                         }
                     }
-                    if (rowIdx !== -1) break;
+                    if (colIdx === -1) {
+                        for (let c = 2; c < fallbackRow.length; c++) {
+                            const cellVal = clean(fallbackRow[c]);
+                            if (cellVal && !isIgnoredColumn(fallbackRow[c]) && cellVal.length >= 3 && prodNumeClean.length >= 3) {
+                                if (cellVal.includes(prodNumeClean) || prodNumeClean.includes(cellVal)) {
+                                    colIdx = c;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fallback extrem: dacă nu se găsește deloc din coloana C (index 2), dar cumva se găsește pe coloana B (index 1) o potrivire perfectă și doar dacă aceasta nu conține cuvinte de ignorat
+                if (colIdx === -1 && productRow.length > 1) {
+                    const cellVal = clean(productRow[1]);
+                    if (cellVal && !isIgnoredColumn(productRow[1]) && cellVal === prodNumeClean) {
+                        colIdx = 1;
+                    }
+                }
+
+                // 3. Căutăm rândul magazinului începând de la rândul 3 (index 2) pentru a nu confunda cu antetele rândurilor 1 sau 2
+                let rowIdx = -1;
+                let bestRowIdx = -1;
+                let bestScore = 0;
+
+                for (let r = 2; r < values.length; r++) {
+                    const currentRow = values[r] || [];
+                    const cellNume = clean(currentRow[0] || '');
+                    const cellAddr = clean(currentRow[1] || '');
+
+                    let currentScore = 0;
+
+                    // Verificăm potrivirea pe adresa magazinului (prioritate maximă)
+                    if (magAdresaClean && cellAddr) {
+                        if (cellAddr === magAdresaClean) {
+                            currentScore += 80; // Potrivire perfectă pe adresă
+                        } else if (cellAddr.length >= 4 && magAdresaClean.length >= 4) {
+                            if (cellAddr.includes(magAdresaClean) || magAdresaClean.includes(cellAddr)) {
+                                currentScore += 40; // Potrivire parțială suficient de lungă pe adresă
+                            }
+                        }
+                    }
+
+                    // Verificăm potrivirea pe numele magazinului
+                    if (magNumeClean && cellNume) {
+                        if (cellNume === magNumeClean) {
+                            currentScore += 50; // Potrivire perfectă pe nume
+                        } else if (cellNume.length >= 4 && magNumeClean.length >= 4) {
+                            if (cellNume.includes(magNumeClean) || magNumeClean.includes(cellNume)) {
+                                if (cellNume === 'linella') {
+                                    currentScore += 5; // Pentru a evita potriviri greșite automate pe cuvântul generic "linella"
+                                } else {
+                                    currentScore += 20; // Potrivire parțială pe nume
+                                }
+                            }
+                        }
+                    }
+
+                    // Bonus major dacă se potrivesc și numele și adresa
+                    if (magAdresaClean && cellAddr && magNumeClean && cellNume) {
+                        if (
+                            (cellAddr === magAdresaClean || cellAddr.includes(magAdresaClean) || magAdresaClean.includes(cellAddr)) &&
+                            (cellNume === magNumeClean || cellNume.includes(magNumeClean) || magNumeClean.includes(cellNume))
+                        ) {
+                            currentScore += 50;
+                        }
+                    }
+
+                    if (currentScore > bestScore && currentScore >= 15) {
+                        bestScore = currentScore;
+                        bestRowIdx = r;
+                    }
+                }
+
+                if (bestRowIdx !== -1) {
+                    rowIdx = bestRowIdx;
                 }
 
                 if (colIdx === -1) {
-                    alert(`Produsul "${prod.nume}" nu a fost găsit ca și coloană de antet în tabelul Google Sheets.\n\nFie adăugați exact denumirea "${prod.nume}" pe prima linie, fie rulați din nou.`);
+                    alert(`Produsul "${prod.nume}" nu a fost găsit în rândul 2 sau rândul 1 al antetului din tabelul Google Sheets.\n\nAsigurați-vă că denumirea se regăsește în capul de tabel.`);
                     setIsSyncing(false);
                     return;
                 }
 
                 if (rowIdx === -1) {
                     // Dacă rândul magazinului nu este găsit, dăm posibilitatea să adăugăm rândul automat!
-                    const createNewRow = window.confirm(`Magazinul "${activeMag.nume}" (${activeMag.adresa}) nu a fost găsit în tabelul Google Sheets în primele coloane.\n\nDoriți să adăugăm o linie nouă pentru acest magazin la sfârșitul tabelului (implicit coloana A: Nume, coloana B: Adresă)?`);
+                    const createNewRow = window.confirm(`Magazinul "${activeMag.nume}" (${activeMag.adresa || 'Fără adresă'}) nu a fost găsit în tabelul Google Sheets pe nicio linie.\n\nDoriți să adăugăm o linie nouă pentru acest magazin la sfârșitul tabelului (coloana A: Nume, coloana B: Adresă)?`);
                     if (createNewRow) {
                         const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${googleSpreadsheetId}/values/${encodeURIComponent(sheetTab)}!A1:append?valueInputOption=USER_ENTERED`;
                         
-                        const newRowValues = Array(colIdx + 1).fill('');
+                        // Generăm o listă de dimensiune corespunzătoare
+                        const newRowValues = Array(Math.max(2, colIdx + 1)).fill('');
                         newRowValues[0] = activeMag.nume;
-                        newRowValues[1] = activeMag.adresa;
+                        newRowValues[1] = activeMag.adresa || '';
                         
                         const appendRes = await fetch(appendUrl, {
                             method: 'POST',
