@@ -42,6 +42,19 @@
         .sortable-ghost { opacity: 0.4; transform: scale(0.98); }
         .cursor-grab { cursor: -webkit-grab; cursor: grab; }
         .cursor-grab:active { cursor: -webkit-grabbing; cursor: grabbing; }
+
+        /* Forțează culoarea neagră/vizibilă pentru toate input-urile de tip number, indiferent de placeholder */
+input[type="number"] {
+    color: #000000 !important; /* Sau culoarea ta de text principal */
+    opacity: 1 !important;
+}
+
+/* Dacă folosești Dark Mode */
+.dark input[type="number"] {
+    color: #ffffff !important;
+}
+
+        
     </style>
 </head>
 <body class="bg-bg-color dark:bg-dark-bg text-text-main dark:text-dark-text-main transition-colors duration-300 m-0">
@@ -2971,6 +2984,7 @@
         
         // Dacă triggerUpdate re-randează tot, verifică dacă nu cumva acesta "șterge" valoarea
         // Dacă problema persistă, încearcă să scoți triggerUpdate de aici o singură dată pentru test
+        triggerUpdate();
         
     }}
     className="w-[60%] text-center border-none bg-transparent font-black text-[1.4rem] text-text-main dark:text-white outline-none" 
