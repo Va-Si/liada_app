@@ -2534,7 +2534,7 @@
         const totalVitrina = loturiCurente.reduce((sum, l) => sum + (parseInt(l.cantitate)||0), 0);
         
         // Stoc Manual & Depozit (Inițializare smart pt 0 gol)
-        const [stocMan, setStocMan] = useState(prod.stocManual === 0 ? '' : (prod.stocManual || ''));
+       const [stocMan, setStocMan] = useState(prod.stocManual !== undefined ? prod.stocManual : '');
         useEffect(() => { setStocMan(prod.stocManual === 0 ? '' : (prod.stocManual || '')); }, [prod.stocManual]);
 
         const [depozit, setDepozit] = useState(prod.depozit || '');
@@ -2548,11 +2548,12 @@
 
         const [isSyncing, setIsSyncing] = useState(false);
 
-        const saveStockToGoogleSheets = async () => {
-            if (!stocMan) {
-                alert("Introduceți o cifră validă la stoc manual înainte de a trimite.");
-                return;
-            }
+       const saveStockToGoogleSheets = async () => {
+    // Verificăm strict dacă este string gol sau null, acceptând 0 ca valoare validă
+    if (stocMan === '' || stocMan === null || stocMan === undefined) { 
+        alert("Introduceți o cifră validă la stoc manual înainte de a trimite.");
+        return;
+    }
 
             // Generăm formatul datei cerut: zz.ll.aa în paranteze după numărul introdus
             const d = new Date();
@@ -2953,12 +2954,13 @@
                                     className="w-[60%] text-center border-none bg-transparent font-black text-[1.4rem] text-text-main dark:text-white outline-none" 
                                     value={stocMan} 
                                     onChange={e=>setStocMan(e.target.value)} 
-                                    onBlur={()=>{ 
-                                        let val = parseInt(stocMan); if(isNaN(val)||val<0) val=0; 
-                                        setStocMan(val===0?'':val); 
-                                        FirebaseService.update('produse_magazin', prod.id, { stocManual: val }); 
-                                        triggerUpdate();
-                                    }} 
+                                   onBlur={()=>{ 
+    let val = parseInt(stocMan); 
+    if(isNaN(val) || val < 0) val = 0; 
+    setStocMan(val); // <--- Aici păstrăm valoarea 0, nu o transformăm în string gol
+    FirebaseService.update('produse_magazin', prod.id, { stocManual: val }); 
+    triggerUpdate();
+}}
                                 />
                                 <button 
                                     onClick={saveStockToGoogleSheets} 
