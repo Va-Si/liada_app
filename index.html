@@ -2548,9 +2548,9 @@
 
         const [isSyncing, setIsSyncing] = useState(false);
 
-       const saveStockToGoogleSheets = async () => {
-    // Verificăm strict dacă este string gol sau null, acceptând 0 ca valoare validă
-    if (stocMan === '' || stocMan === null || stocMan === undefined) { 
+      const saveStockToGoogleSheets = async () => {
+    // MODIFICARE: Verificăm dacă este string gol, dar acceptăm "0"
+    if (stocMan === '') { 
         alert("Introduceți o cifră validă la stoc manual înainte de a trimite.");
         return;
     }
@@ -2954,11 +2954,14 @@
                                     className="w-[60%] text-center border-none bg-transparent font-black text-[1.4rem] text-text-main dark:text-white outline-none" 
                                     value={stocMan} 
                                     onChange={e=>setStocMan(e.target.value)} 
-                                   onBlur={()=>{ 
-    let val = parseInt(stocMan); 
-    if(isNaN(val) || val < 0) val = 0; 
-    setStocMan(val); // <--- Aici păstrăm valoarea 0, nu o transformăm în string gol
-    FirebaseService.update('produse_magazin', prod.id, { stocManual: val }); 
+                                   onBlur={() => {
+    let val = parseInt(stocMan);
+    if (isNaN(val) || val < 0) val = 0;
+    
+    // MODIFICARE: Păstrăm valoarea ca string, nu o golim niciodată
+    setStocMan(val.toString()); 
+    
+    FirebaseService.update('produse_magazin', prod.id, { stocManual: val });
     triggerUpdate();
 }}
                                 />
