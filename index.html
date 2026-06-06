@@ -2949,22 +2949,29 @@
                         <div className="bg-bg-color dark:bg-dark-bg p-3 rounded-xl text-center border border-border-color dark:border-dark-border shadow-sm">
                             <span className="block text-[0.8rem] font-bold text-text-sec uppercase tracking-wide mb-1">Stoc (Manual)</span>
                             <div className="flex items-center justify-center gap-1 mt-1">
-                                <input 
-                                    type="number" min="0" placeholder="0" 
-                                    className="w-[60%] text-center border-none bg-transparent font-black text-[1.4rem] text-text-main dark:text-white outline-none" 
-                                    value={stocMan} 
-                                    onChange={e=>setStocMan(e.target.value)} 
-                                   onBlur={() => {
-    let val = parseInt(stocMan);
-    if (isNaN(val) || val < 0) val = 0;
-    
-    // MODIFICARE: Păstrăm valoarea ca string, nu o golim niciodată
-    setStocMan(val.toString()); 
-    
-    FirebaseService.update('produse_magazin', prod.id, { stocManual: val });
-    triggerUpdate();
-}}
-                                />
+                               <input 
+    type="number" 
+    min="0" 
+    placeholder="0" 
+    // MODIFICARE AICI:
+    value={stocMan ?? ""} 
+    onChange={e => setStocMan(e.target.value)} 
+    onBlur={(e) => {
+        // 1. Verificăm dacă e gol, dacă da -> 0
+        let val = e.target.value === "" ? 0 : parseInt(e.target.value);
+        
+        // 2. Prevenim NaN
+        if (isNaN(val)) val = 0;
+        
+        // 3. Setăm starea ca STRING "0"
+        setStocMan(val.toString()); 
+        
+        // 4. Update Firebase
+        FirebaseService.update('produse_magazin', prod.id, { stocManual: val });
+        triggerUpdate();
+    }}
+    className="w-[60%] text-center border-none bg-transparent font-black text-[1.4rem] text-text-main dark:text-white outline-none" 
+/>
                                 <button 
                                     onClick={saveStockToGoogleSheets} 
                                     disabled={isSyncing}
