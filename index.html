@@ -724,6 +724,11 @@ input[type="number"] {
         const dataRef = useRef(arrSectoare);
         dataRef.current = arrSectoare;
         const [newSect, setNewSect] = useState({ nume: '', culoare: CONFIG.COLORS.DEFAULT_SECTOR });
+        const [tempStoc, setTempStoc] = useState(stocMan.toString());
+        // 2. Adaugă acest useEffect pentru a sincroniza dacă stocMan se schimbă din altă parte
+useEffect(() => {
+    setTempStoc(stocMan.toString());
+}, [stocMan]);
 
         useEffect(() => {
             if (containerRef.current) {
@@ -2966,26 +2971,20 @@ input[type="number"] {
     type="number" 
     min="0" 
     placeholder="0" 
-    // Forțăm valoarea să fie mereu un string: dacă stocMan e null/undefined/0, afișăm "0"
-    value={stocMan !== null && stocMan !== undefined ? stocMan : "0"} 
+    // Folosim tempStoc pentru valoarea din input
+    value={tempStoc} 
     
-    onChange={e => {
-        // Actualizăm starea imediat, fără să așteptăm onBlur
-        setStocMan(e.target.value);
-    }} 
+    // Doar actualizăm starea locală, FĂRĂ să trimitem la Firebase (asta previne flicker-ul)
+    onChange={(e) => setTempStoc(e.target.value)} 
     
-    onBlur={(e) => {
-        // Facem update DOAR la blur, dar nu mai setăm starea din nou (ca să evităm conflictul)
-        let val = parseInt(e.target.value);
+    // Abia la Blur, când ai terminat de scris, trimitem la Firebase
+    onBlur={() => {
+        let val = parseInt(tempStoc);
         if (isNaN(val) || val < 0) val = 0;
         
-        // Trimitem la Firebase
+        // Acum trimitem la Firebase
         FirebaseService.update('produse_magazin', prod.id, { stocManual: val });
-        
-        // Dacă triggerUpdate re-randează tot, verifică dacă nu cumva acesta "șterge" valoarea
-        // Dacă problema persistă, încearcă să scoți triggerUpdate de aici o singură dată pentru test
-        triggerUpdate();
-        
+        triggerUpdate(); // Abia acum re-randăm totul
     }}
     className="w-[60%] text-center border-none bg-transparent font-black text-[1.4rem] text-text-main dark:text-white outline-none" 
 />
