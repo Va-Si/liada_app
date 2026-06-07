@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LIADA</title>
+    <title>LIADA - Mercantizare (Arhitectură Pro)</title>
     
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -259,22 +259,28 @@
                 return orderA - orderB;
             });
         },
-        initSortable: (container, dataRef, collectionName) => {
-            let originalNextSibling = null;
+        initSortable: (container, dataRef, collectionName, options = {}) => {
+            const isTouchDevice = typeof window !== 'undefined' && (
+                'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0
+            );
+
             return new Sortable(container, {
-                animation: 150, delay: 200, delayOnTouchOnly: true, touchStartThreshold: 5, ghostClass: 'sortable-ghost',
-                onStart: (evt) => {
-                    originalNextSibling = evt.item.nextSibling;
-                },
+                animation: 150,
+                delay: isTouchDevice ? 50 : 120,
+                delayOnTouchOnly: false,
+                touchStartThreshold: 4,
+                forceFallback: isTouchDevice,
+                fallbackOnBody: true,
+                fallbackTolerance: 4,
+                scroll: true,
+                scrollSensitivity: 80,
+                scrollSpeed: 10,
+                ghostClass: 'sortable-ghost',
+                handle: options.handle || undefined,
+                filter: 'button, input, select, textarea, a, [data-no-drag="true"]',
+                preventOnFilter: false,
                 onEnd: (evt) => {
                     if (evt.oldIndex !== undefined && evt.newIndex !== undefined && evt.oldIndex !== evt.newIndex) {
-                        // Revert standard DOM change so React can handle the rendering correctly
-                        if (originalNextSibling) {
-                            evt.from.insertBefore(evt.item, originalNextSibling);
-                        } else {
-                            evt.from.appendChild(evt.item);
-                        }
-
                         const newOrder = [...dataRef.current];
                         const moved = newOrder.splice(evt.oldIndex, 1)[0];
                         newOrder.splice(evt.newIndex, 0, moved);
@@ -1935,7 +1941,7 @@
 
         useEffect(() => {
             if (containerRef.current) {
-                const sortable = Helpers.initSortable(containerRef.current, dataRef, 'magazine');
+                const sortable = Helpers.initSortable(containerRef.current, dataRef, 'magazine', );
                 return () => sortable.destroy();
             }
         }, [columns, magSect.length]);
@@ -2668,7 +2674,7 @@
                     throw new Error(resData.error);
                 }
 
-                alert(`Stocul manual (${stocMan}) a fost salvat cu succes în tabelul Google Sheets!`);
+                // succesul rămâne silențios; se afișează doar erorile.
             } catch (err) {
                 console.error("Eroare Apps Script:", err);
                 alert(`Eroare la scriere în Sheets (Apps Script): ${err.message}`);
