@@ -146,17 +146,44 @@
             }
         },
         deleteProductCascading: async (productId) => {
-            const batch = db.batch();
-            batch.delete(db.collection('produse_magazin').doc(productId));
             try {
+                const prodRef = db.collection('produse_magazin').doc(productId);
+                const prodDoc = await prodRef.get();
+                const batch = db.batch();
+
+                if (prodDoc.exists) {
+                    const prodData = prodDoc.data() || {};
+                    const imgDocId = `${prodData.categorie || ''}___${prodData.nume || ''}`.trim();
+                    if (imgDocId !== '___') {
+                        batch.delete(db.collection('imagini_produse').doc(imgDocId));
+                    }
+                }
+
                 const loturiSnap = await db.collection('loturi').where('produsId', '==', productId).get();
                 loturiSnap.forEach(doc => {
                     batch.delete(doc.ref);
                 });
+
+                batch.delete(prodRef);
                 await batch.commit();
             } catch (err) {
                 console.error("Product cascading deletion failed:", err);
-                await db.collection('produse_magazin').doc(productId).delete();
+                try {
+                    const prodSnap = await db.collection('produse_magazin').doc(productId).get();
+                    if (prodSnap.exists) {
+                        const prodData = prodSnap.data() || {};
+                        const imgDocId = `${prodData.categorie || ''}___${prodData.nume || ''}`.trim();
+                        if (imgDocId !== '___') {
+                            await db.collection('imagini_produse').doc(imgDocId).delete();
+                        }
+                    }
+                } catch(e){}
+                try { await db.collection('loturi').where('produsId', '==', productId).get().then(s => {
+                    const b = db.batch();
+                    s.forEach(doc => b.delete(doc.ref));
+                    return b.commit();
+                }); } catch(e){}
+                try { await db.collection('produse_magazin').doc(productId).delete(); } catch(e){}
             }
         }
     };
@@ -343,9 +370,10 @@
         const buildBackupPayload = (scope) => {
             const base = {
                 backupType: scope,
-                version: 1,
+                version: 2,
                 createdAt: new Date().toISOString()
             };
+
             if (scope === 'settings') {
                 return {
                     ...base,
@@ -358,6 +386,17 @@
                     googleAppsScriptUrl
                 };
             }
+
+            if (scope === 'products_lots') {
+                const produse = Object.values(dbProduse).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+                const loturi = Object.values(dbLoturi).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+                return {
+                    ...base,
+                    produse,
+                    loturi
+                };
+            }
+
             const sectoare = Object.values(dbSectoare).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
             const magazine = Object.values(dbMagazine).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
             return {
@@ -380,10 +419,14 @@
         };
 
         const handleExportBackup = (scope = 'settings') => {
-            const normalizedScope = scope === 'sectors_stores' ? 'sectors_stores' : 'settings';
+            const normalizedScope = ['sectors_stores', 'products_lots'].includes(scope) ? scope : 'settings';
             const payload = buildBackupPayload(normalizedScope);
             const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-            const fileName = normalizedScope === 'settings' ? `liada-backup-setari-${stamp}.json` : `liada-backup-sectoare-magazine-${stamp}.json`;
+            const fileName = normalizedScope === 'settings'
+                ? `liada-backup-setari-${stamp}.json`
+                : normalizedScope === 'products_lots'
+                    ? `liada-backup-produse-loturi-${stamp}.json`
+                    : `liada-backup-sectoare-magazine-${stamp}.json`;
             downloadJson(payload, fileName);
         };
 
@@ -1060,7 +1103,7 @@
         );
     };
 
-    const SettingsCategoryCard = ({ catName, catData, catalogCategorii, updateCatalog, promptAction, confirmAction }) => {
+    const SettingsCategoryCard = ({ catName, catData, catalogCategorii, updateCatalog, promptAction, confirmAction, handleDeleteCategory }) => {
         const { openModal } = useApp();
         const isDrojdii = catName === 'Drojdii';
         const productsContainerRef = useRef(null);
@@ -1146,6 +1189,14 @@
                                 }
                             };
                             promptAction("Redenumește", catName, "Nume", onRenameCategory); 
+                        }}/>
+                        <ButtonIcon icon="fas fa-trash" className="!text-danger !text-[0.9rem] !p-1" onClick={(e) => {
+                            e.stopPropagation();
+                            confirmAction(
+                                "Șterge categoria",
+                                `Sigur vrei să ștergi categoria "${catName}" și toate produsele + loturile din ea?`,
+                                () => handleDeleteCategory(catName)
+                            );
                         }}/>
                     </div>
                     <div className="flex gap-2 items-center bg-gray-100 dark:bg-gray-800 p-1.5 rounded-xl" onClick={e => e.stopPropagation()}>
@@ -1265,6 +1316,30 @@
                     ...catalogCategorii, 
                     [n]: { termen: 30, unit: 'zile', produse: [], order: Object.keys(catalogCategorii).length }
                 });
+            }
+        };
+
+        const handleDeleteCategory = async (catName) => {
+            try {
+                const snap = await db.collection('produse_magazin').where('categorie', '==', catName).get();
+                const ids = [];
+                snap.forEach(doc => ids.push(doc.id));
+                for (const id of ids) {
+                    await FirebaseService.deleteProductCascading(id);
+                }
+
+                const nextCatalog = { ...catalogCategorii };
+                delete nextCatalog[catName];
+                const orderedKeys = Object.keys(nextCatalog);
+                orderedKeys.forEach((k, idx) => {
+                    if (nextCatalog[k] && nextCatalog[k].order === undefined) {
+                        nextCatalog[k].order = idx;
+                    }
+                });
+                updateCatalog(nextCatalog);
+            } catch (err) {
+                console.error('Eroare la ștergerea categoriei:', err);
+                alert('Nu am putut șterge categoria.');
             }
         };
 
@@ -1731,6 +1806,7 @@
                                 updateCatalog={updateCatalog} 
                                 promptAction={promptAction} 
                                 confirmAction={confirmAction} 
+                                handleDeleteCategory={handleDeleteCategory}
                             />
                         ))}
                     </div>
@@ -2185,7 +2261,14 @@
                                     {produse.map((p, idx) => (
                                         <div key={p.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" onClick={()=>setView({page: PAGES.PRODUCT, data: { id: p.id, nume: p.nume, categorie: cat, magazinCuloare: magazin.culoare, magazinNume: magazin.nume, magazinAdresa: magazin.adresa, backData: {magazin: magazin, sector: sector} }})}>
                                             <div className={`flex justify-between items-center py-3 mx-5 ${idx > 0 ? 'border-t-2 border-gray-200 dark:border-gray-700' : 'border-t-2 border-transparent'}`}>
-                                                <span className="font-bold text-[1.05rem]">{p.nume}</span>
+                                                <span className="font-bold text-[1.05rem] flex items-center gap-2">
+                                                    {p.nume}
+                                                    <ButtonIcon 
+                                                        icon="fas fa-barcode text-accent" 
+                                                        className="!text-[0.95rem] !p-1" 
+                                                        onClick={(e)=>{e.stopPropagation(); openModal(MODAL_TYPES.PRODUCT_IMAGE, { catName: p.categorie, prodName: p.nume });}} 
+                                                    />
+                                                </span>
                                                 <div className="flex items-center">
                                                     <ButtonDanger icon="fas fa-trash" className="mr-[10px] !text-[1.1rem]" onClick={(e)=>{e.stopPropagation(); confirmAction("Șterge","Ștergi produsul cu toate loturile sale?", ()=>FirebaseService.deleteProductCascading(p.id));}} />
                                                     <i className="fas fa-chevron-right text-border-color"></i>
@@ -2552,6 +2635,7 @@
             <div className="animate-fade-in pb-[100px]">
                 <FrozenHeader title={prod.nume} subtitle={`${activeMag.nume} - ${activeMag.adresa}`} bgColor={activeMag.culoare || CONFIG.COLORS.DEFAULT_STORE} actions={
                     <React.Fragment>
+                        <ButtonIcon icon="fas fa-barcode text-white" onClick={() => openModal(MODAL_TYPES.PRODUCT_IMAGE, { catName: prod.categorie, prodName: prod.nume })} />
                         <ButtonIcon icon="fas fa-arrow-left text-white" onClick={()=>setView({page: PAGES.STORE, data: prod.backData || { magazin: activeMag, sector: { id: activeMag.sectorId, nume: 'Sector' } }})}/>
                         <ButtonIcon icon="fas fa-home text-white" onClick={()=>setView({page: PAGES.MAIN})}/>
                     </React.Fragment>
@@ -2811,6 +2895,7 @@
                     <Select value={selectedBackupScope} onChange={(e) => setExportScope(e.target.value)}>
                         <option value="settings">Setări: rețele, detalii, produse și termene</option>
                         <option value="sectors_stores">Sectoare și magazine</option>
+                        <option value="products_lots">Produse + loturi</option>
                     </Select>
                     <div className="flex gap-3 pt-5">
                         <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
