@@ -459,30 +459,24 @@
         };
 
         // Storage Updates - salvează în paralel în Firestore și în LocalStorage pentru a reduce riscul de pierdere a setărilor
-        const updateCatalog = async (newCat, deletedList = deletedCategoriesRef.current) => { 
+        const updateCatalog = (newCat, deletedList = deletedCategoriesRef.current) => { 
+            const normalized = Object.fromEntries(
+                Object.entries(newCat || {}).map(([name, data]) => [String(name).trim(), { ...(data || {}) }])
+            );
             const normalizedDeleted = saveDeletedCategories(deletedList);
-            const normalized = filterDeletedCategories(newCat, normalizedDeleted);
             setDeletedCategories(normalizedDeleted);
             setCatalogCategorii(normalized);
             try { localStorage.setItem('catalogCategorii', JSON.stringify(normalized)); } catch(e){}
             try { localStorage.setItem(CATEGORY_TOMBSTONES_KEY, JSON.stringify(normalizedDeleted)); } catch(e){}
-            try {
-                await db.collection('setari').doc('config_global').update({ 
-                    catalogCategorii: normalized, 
-                    deletedCategories: normalizedDeleted 
-                });
-            } catch (err) {
-                console.error("Error writing catalog:", err);
-                // Dacă documentul nu există încă, îl creăm explicit cu valorile curente.
-                try {
-                    await db.collection('setari').doc('config_global').set({ 
-                        catalogCategorii: normalized, 
-                        deletedCategories: normalizedDeleted 
-                    }, { merge: true });
-                } catch (e) {
-                    console.error("Fallback write failed:", e);
-                }
-            }
+            db.collection('setari').doc('config_global').update({ catalogCategorii: normalized })
+              .catch(async (err) => {
+                  console.error("Error writing catalog:", err);
+                  try {
+                      await db.collection('setari').doc('config_global').set({ catalogCategorii: normalized }, { merge: true });
+                  } catch (e) {
+                      console.error("Fallback catalog write failed:", e);
+                  }
+              });
         };
         const updateRetele = (newRet) => { 
             setReteleMagazine(newRet);
@@ -557,7 +551,9 @@
                         try { localStorage.setItem(CATEGORY_TOMBSTONES_KEY, JSON.stringify(mergedDeleted)); } catch(e){}
                     }
                     if (data.catalogCategorii) {
-                        const cleanedCatalog = filterDeletedCategories(data.catalogCategorii, mergedDeleted);
+                        const cleanedCatalog = Object.fromEntries(
+                            Object.entries(data.catalogCategorii || {}).map(([name, value]) => [String(name).trim(), { ...(value || {}) }])
+                        );
                         try { localStorage.setItem('catalogCategorii', JSON.stringify(cleanedCatalog)); } catch(e){}
                         setCatalogCategorii(prev => JSON.stringify(prev) === JSON.stringify(cleanedCatalog) ? prev : cleanedCatalog);
                     }
@@ -1354,7 +1350,7 @@
     };
 
     const SettingsPage = () => {
-        const { setView, theme, setTheme, reteleMagazine, updateRetele, proprietatiMagazine, updateProp, catalogCategorii, deletedCategories, updateCatalog, promptAction, confirmAction, openModal, modal, closeModal, googleSpreadsheetId, updateGoogleSpreadsheetId, googleSheetName, updateGoogleSheetName, googleAppsScriptUrl, updateGoogleAppsScriptUrl } = useApp();
+        const { setView, theme, setTheme, reteleMagazine, updateRetele, proprietatiMagazine, updateProp, catalogCategorii, updateCatalog, promptAction, confirmAction, openModal, modal, closeModal, googleSpreadsheetId, updateGoogleSpreadsheetId, googleSheetName, updateGoogleSheetName, googleAppsScriptUrl, updateGoogleAppsScriptUrl } = useApp();
         const [newRet, setNewRet] = useState({ nume: '', culoare: CONFIG.COLORS.DEFAULT_SECTOR });
         const [newProp, setNewProp] = useState('');
 
@@ -1369,11 +1365,10 @@
                     });
                     return false;
                 }
-                const nextDeleted = deletedCategories.filter(c => String(c).trim().toLowerCase() !== n.trim().toLowerCase());
                 updateCatalog({
                     ...catalogCategorii, 
                     [n]: { termen: 30, unit: 'zile', produse: [], order: Object.keys(catalogCategorii).length }
-                }, nextDeleted);
+                });
             }
         };
 
@@ -1382,28 +1377,22 @@
                 const snap = await db.collection('produse_magazin').where('categorie', '==', catName).get();
                 const ids = [];
                 snap.forEach(doc => ids.push(doc.id));
-
                 for (const id of ids) {
                     await FirebaseService.deleteProductCascading(id);
                 }
 
-                const nextDeleted = [
-                    ...deletedCategories.filter(c => String(c).trim().toLowerCase() !== catName.trim().toLowerCase()),
-                    catName
-                ];
-
                 const nextCatalog = { ...catalogCategorii };
                 delete nextCatalog[catName];
-
                 const orderedKeys = Object.keys(nextCatalog);
                 orderedKeys.forEach((k, idx) => {
                     if (nextCatalog[k] && nextCatalog[k].order === undefined) {
                         nextCatalog[k].order = idx;
                     }
                 });
-
-                // Actualizare imediată în UI / localStorage + scriere directă în Firestore
-                await updateCatalog(nextCatalog, nextDeleted);
+                updateCatalog(nextCatalog, []);
+                db.collection('setari').doc('config_global').set({
+                    deletedCategories: firebase.firestore.FieldValue.delete()
+                }, { merge: true }).catch(err => console.error("Error clearing deletedCategories:", err));
             } catch (err) {
                 console.error('Eroare la ștergerea categoriei:', err);
                 alert('Nu am putut șterge categoria.');
