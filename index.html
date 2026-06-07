@@ -7,12 +7,10 @@
     
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/1356/1356559.png">
+    
+         <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/1356/1356559.png">
   <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1356/1356559.png">
 
-   
-    
     <script src="https://www.gstatic.com/firebasejs/10.1.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.1.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.1.0/firebase-auth-compat.js"></script>
@@ -47,10 +45,6 @@
         .sortable-ghost { opacity: 0.4; transform: scale(0.98); }
         .cursor-grab { cursor: -webkit-grab; cursor: grab; }
         .cursor-grab:active { cursor: -webkit-grabbing; cursor: grabbing; }
-
-    
-
-        
     </style>
 </head>
 <body class="bg-bg-color dark:bg-dark-bg text-text-main dark:text-dark-text-main transition-colors duration-300 m-0">
@@ -178,6 +172,7 @@
         ADD_STORE: 'add_store', EDIT_STORE: 'edit_store',
         ADD_PRODUCT: 'add_product', ADD_LOT: 'add_lot',
         ADD_RET: 'add_ret', EDIT_RET: 'edit_ret', ADD_PROP: 'add_prop',
+        EXPORT_BACKUP: 'export_backup',
         PRODUCT_IMAGE: 'product_image'
     };
 
@@ -325,156 +320,109 @@
         const [dbProduse, setDbProduse] = useState({});
         const [dbLoturi, setDbLoturi] = useState({});
 
-        // Setări Globale cu stocare în Firestore ca sursă unică a adevărului (pentru sincronizare multi-device)
-        const [catalogCategorii, setCatalogCategorii] = useState(CONFIG.DEFAULT_CATALOG);
-        const [reteleMagazine, setReteleMagazine] = useState(CONFIG.DEFAULT_RETELE);
-        const [proprietatiMagazine, setProprietatiMagazine] = useState(CONFIG.DEFAULT_PROPS);
-        const [googleSpreadsheetId, setGoogleSpreadsheetId] = useState('');
-        const [googleSheetName, setGoogleSheetName] = useState('Sheet1');
-        const [googleClientId, setGoogleClientId] = useState('');
-        const [googleAppsScriptUrl, setGoogleAppsScriptUrl] = useState('');
-        const [googleSyncMethod, setGoogleSyncMethod] = useState('script'); // 'oauth' sau 'script'
-        const [gUser, setGUser] = useState(null);
-        const [gToken, setGToken] = useState(null);
-
-        // Încarcă din localStorage tokenul temporar dacă există și gestionează flow-ul popup OAuth (părinte & copil)
-        useEffect(() => {
-            // 1. Verifică dacă suntem în interiorul pop-up-ului Google oauth pentru a transmite token-ul părintelui
-            const hash = window.location.hash;
-            if (hash && (window.opener || window.parent !== window)) {
-                const params = new URLSearchParams(hash.replace('#', ''));
-                const token = params.get('access_token');
-                if (token) {
-                    try {
-                        if (window.opener) {
-                            window.opener.postMessage({ type: 'GOOGLE_OAUTH_SUCCESS', token }, '*');
-                            window.close();
-                            return;
-                        }
-                    } catch (e) {
-                        console.error("Eroare la transmitere token în popup:", e);
-                    }
-                }
-            }
-
-            // 2. Încarcă profilul utilizatorului utilizând token-ul salvat
-            const checkAndLoadUserProfile = (token) => {
-                fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                })
-                .then(res => {
-                    if (res.ok) return res.json();
-                    throw new Error("Token expirat");
-                })
-                .then(u => {
-                    if (u && u.email) {
-                        setGUser({
-                            displayName: u.name,
-                            email: u.email,
-                            photoURL: u.picture
-                        });
-                        setGToken(token);
-                    }
-                })
-                .catch(err => {
-                    console.warn("Profil Google neîncărcat:", err);
-                    setGToken(null);
-                    localStorage.removeItem('g_access_token');
-                    setGUser(null);
-                });
-            };
-
-            const savedToken = localStorage.getItem('g_access_token');
-            if (savedToken) {
-                checkAndLoadUserProfile(savedToken);
-            }
-
-            const handleOauthMessage = (e) => {
-                if (e.data && e.data.type === 'GOOGLE_OAUTH_SUCCESS' && e.data.token) {
-                    localStorage.setItem('g_access_token', e.data.token);
-                    checkAndLoadUserProfile(e.data.token);
-                }
-            };
-
-            window.addEventListener('message', handleOauthMessage);
-            return () => window.removeEventListener('message', handleOauthMessage);
-        }, []);
-
-        const gSignIn = async () => {
+        // Funcție utilitară pentru a citi din localStorage în siguranță de la început
+        const getLocalStorageItem = (key, defaultValue) => {
             try {
-                const clientId = googleClientId;
-                if (!clientId) {
-                    alert("Aveți nevoie de un Client ID Google completat în ecranul de Setări pentru a folosi Sincronizarea Directă.");
-                    return null;
-                }
-                const redirectUri = window.location.origin;
-                const scope = "https://www.googleapis.com/auth/spreadsheets";
-                const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(scope)}`;
-                
-                const popup = window.open(authUrl, 'google_oauth_popup', 'width=600,height=700');
-                if (!popup) {
-                    alert("Pop-up blocat. Vă rugăm să dezactivați blocarea pop-up-urilor pentru această pagină.");
-                }
-                return null;
-            } catch (err) {
-                console.error("Autentificare Google eșuată:", err);
-                throw err;
+                const item = localStorage.getItem(key);
+                return item ? JSON.parse(item) : defaultValue;
+            } catch (e) {
+                return defaultValue;
             }
         };
 
-        const gSignOut = async () => {
-            try {
-                setGUser(null);
-                setGToken(null);
-                localStorage.removeItem('g_access_token');
-            } catch (err) {
-                console.error("Delogare Google eșuată:", err);
-            }
-        };
+        // Setări Globale cu stocare hibridă (Firestore + LocalStorage) pentru robustețe maximă la recompilare
+        const [catalogCategorii, setCatalogCategorii] = useState(() => getLocalStorageItem('catalogCategorii', CONFIG.DEFAULT_CATALOG));
+        const [reteleMagazine, setReteleMagazine] = useState(() => getLocalStorageItem('reteleMagazine', CONFIG.DEFAULT_RETELE));
+        const [proprietatiMagazine, setProprietatiMagazine] = useState(() => getLocalStorageItem('proprietatiMagazine', CONFIG.DEFAULT_PROPS));
+        const [googleSpreadsheetId, setGoogleSpreadsheetId] = useState(() => localStorage.getItem('googleSpreadsheetId') || '');
+        const [googleSheetName, setGoogleSheetName] = useState(() => localStorage.getItem('googleSheetName') || 'Sheet1');
+        const [googleAppsScriptUrl, setGoogleAppsScriptUrl] = useState(() => localStorage.getItem('googleAppsScriptUrl') || '');
 
         const getExpConf = (lvl, defVal, defUnit) => ({ val: Math.max(0, parseInt(localStorage.getItem(`expTimeVal_${lvl}`)) || defVal), unit: localStorage.getItem(`expTimeUnit_${lvl}`) || defUnit });
         const [expConfigs, setExpConfigs] = useState({ global: getExpConf('global', 2, 'luni'), sector: getExpConf('sector', 1, 'luni'), store: getExpConf('store', 2, 'saptamani') });
+        const buildBackupPayload = (scope) => {
+            const base = {
+                backupType: scope,
+                version: 1,
+                createdAt: new Date().toISOString()
+            };
+            if (scope === 'settings') {
+                return {
+                    ...base,
+                    catalogCategorii,
+                    reteleMagazine,
+                    proprietatiMagazine,
+                    expConfigs,
+                    googleSpreadsheetId,
+                    googleSheetName,
+                    googleAppsScriptUrl
+                };
+            }
+            const sectoare = Object.values(dbSectoare).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+            const magazine = Object.values(dbMagazine).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+            return {
+                ...base,
+                sectoare,
+                magazine
+            };
+        };
 
-        // Storage Updates - salvează acum direct în Firestore config_global, nu în localStorage!
+        const downloadJson = (payload, fileName) => {
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        };
+
+        const handleExportBackup = (scope = 'settings') => {
+            const normalizedScope = scope === 'sectors_stores' ? 'sectors_stores' : 'settings';
+            const payload = buildBackupPayload(normalizedScope);
+            const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            const fileName = normalizedScope === 'settings' ? `liada-backup-setari-${stamp}.json` : `liada-backup-sectoare-magazine-${stamp}.json`;
+            downloadJson(payload, fileName);
+        };
+
+        // Storage Updates - salvează în paralel în Firestore și în LocalStorage pentru a reduce riscul de pierdere a setărilor
         const updateCatalog = (newCat) => { 
             setCatalogCategorii(newCat);
+            try { localStorage.setItem('catalogCategorii', JSON.stringify(newCat)); } catch(e){}
             db.collection('setari').doc('config_global').set({ catalogCategorii: newCat }, { merge: true })
               .catch(err => console.error("Error writing catalog:", err));
         };
         const updateRetele = (newRet) => { 
             setReteleMagazine(newRet);
+            try { localStorage.setItem('reteleMagazine', JSON.stringify(newRet)); } catch(e){}
             db.collection('setari').doc('config_global').set({ reteleMagazine: newRet }, { merge: true })
               .catch(err => console.error("Error writing retele:", err));
         };
         const updateProp = (newProp) => { 
             setProprietatiMagazine(newProp);
+            try { localStorage.setItem('proprietatiMagazine', JSON.stringify(newProp)); } catch(e){}
             db.collection('setari').doc('config_global').set({ proprietatiMagazine: newProp }, { merge: true })
               .catch(err => console.error("Error writing properties:", err));
         };
         const updateGoogleSpreadsheetId = (id) => {
             setGoogleSpreadsheetId(id);
+            try { localStorage.setItem('googleSpreadsheetId', id); } catch(e){}
             db.collection('setari').doc('config_global').set({ googleSpreadsheetId: id }, { merge: true })
               .catch(err => console.error("Error writing spreadsheet ID:", err));
         };
         const updateGoogleSheetName = (name) => {
             setGoogleSheetName(name);
+            try { localStorage.setItem('googleSheetName', name); } catch(e){}
             db.collection('setari').doc('config_global').set({ googleSheetName: name }, { merge: true })
               .catch(err => console.error("Error writing sheet name:", err));
         };
-        const updateGoogleClientId = (id) => {
-            setGoogleClientId(id);
-            db.collection('setari').doc('config_global').set({ googleClientId: id }, { merge: true })
-              .catch(err => console.error("Error writing Google Client ID:", err));
-        };
         const updateGoogleAppsScriptUrl = (url) => {
             setGoogleAppsScriptUrl(url);
+            try { localStorage.setItem('googleAppsScriptUrl', url); } catch(e){}
             db.collection('setari').doc('config_global').set({ googleAppsScriptUrl: url }, { merge: true })
               .catch(err => console.error("Error writing Google Apps Script URL:", err));
-        };
-        const updateGoogleSyncMethod = (method) => {
-            setGoogleSyncMethod(method);
-            db.collection('setari').doc('config_global').set({ googleSyncMethod: method }, { merge: true })
-              .catch(err => console.error("Error writing Google Sync Method:", err));
         };
         const updateExpConfig = (type, val, unit) => { 
             localStorage.setItem(`expTimeVal_${type}`, val); 
@@ -513,41 +461,38 @@
                 if (doc.exists) {
                     const data = doc.data();
                     if (data.catalogCategorii) {
+                        try { localStorage.setItem('catalogCategorii', JSON.stringify(data.catalogCategorii)); } catch(e){}
                         setCatalogCategorii(prev => JSON.stringify(prev) === JSON.stringify(data.catalogCategorii) ? prev : data.catalogCategorii);
                     }
                     if (data.reteleMagazine) {
+                        try { localStorage.setItem('reteleMagazine', JSON.stringify(data.reteleMagazine)); } catch(e){}
                         setReteleMagazine(prev => JSON.stringify(prev) === JSON.stringify(data.reteleMagazine) ? prev : data.reteleMagazine);
                     }
                     if (data.proprietatiMagazine) {
+                        try { localStorage.setItem('proprietatiMagazine', JSON.stringify(data.proprietatiMagazine)); } catch(e){}
                         setProprietatiMagazine(prev => JSON.stringify(prev) === JSON.stringify(data.proprietatiMagazine) ? prev : data.proprietatiMagazine);
                     }
                     if (data.googleSpreadsheetId !== undefined) {
                         setGoogleSpreadsheetId(data.googleSpreadsheetId);
+                        try { localStorage.setItem('googleSpreadsheetId', data.googleSpreadsheetId); } catch(e){}
                     }
                     if (data.googleSheetName !== undefined) {
                         setGoogleSheetName(data.googleSheetName);
+                        try { localStorage.setItem('googleSheetName', data.googleSheetName); } catch(e){}
                     }
-                    if (data.googleClientId !== undefined) {
-                        setGoogleClientId(data.googleClientId);
-                    }
+
                     if (data.googleAppsScriptUrl !== undefined) {
                         setGoogleAppsScriptUrl(data.googleAppsScriptUrl);
-                    }
-                    if (data.googleSyncMethod !== undefined) {
-                        setGoogleSyncMethod(data.googleSyncMethod);
+                        try { localStorage.setItem('googleAppsScriptUrl', data.googleAppsScriptUrl); } catch(e){}
                     }
                 } else {
-                    // Dacă e prima dată când pornește pe acel Firestore, inițializăm documentul cu CONFIG
-                    db.collection('setari').doc('config_global').set({
-                        catalogCategorii: CONFIG.DEFAULT_CATALOG,
-                        reteleMagazine: CONFIG.DEFAULT_RETELE,
-                        proprietatiMagazine: CONFIG.DEFAULT_PROPS,
-                        googleSyncMethod: 'script'
-                    }).catch(err => console.error("Initial config setup failed", err));
+                    // Dacă documentul global lipsește, nu îl recreăm automat cu valori standard.
+                    // Păstrăm stările locale și evităm orice suprascriere automată a setărilor existente.
+                    console.warn("config_global lipsește din Firestore; aplicația folosește valorile locale fără a rescrie datele standard.");
                 }
                 checkReady();
             }, err => {
-                console.error("Settings listener error, fallback to defaults/localStorage:", err);
+                console.warn("Settings listener error, fallback automatic la localStorage:", err);
                 checkReady();
             });
 
@@ -595,8 +540,8 @@
             dbSectoare, dbMagazine, dbProduse, dbLoturi,
             catalogCategorii, updateCatalog, reteleMagazine, updateRetele, proprietatiMagazine, updateProp, expConfigs, updateExpConfig,
             googleSpreadsheetId, updateGoogleSpreadsheetId, googleSheetName, updateGoogleSheetName,
-            googleClientId, updateGoogleClientId, googleAppsScriptUrl, updateGoogleAppsScriptUrl, googleSyncMethod, updateGoogleSyncMethod,
-            gUser, gToken, gSignIn, gSignOut
+            googleAppsScriptUrl, updateGoogleAppsScriptUrl,
+            handleExportBackup
         };
 
         return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
@@ -713,14 +658,104 @@
     // 7. PAGE COMPONENTS
     // ==========================================
     const MainPage = () => {
-        const { setView, dbSectoare, confirmAction, openModal, modal, closeModal } = useApp();
+        const { 
+            setView, dbSectoare, dbMagazine, catalogCategorii, reteleMagazine, proprietatiMagazine, expConfigs,
+            googleSpreadsheetId, googleSheetName, googleAppsScriptUrl,
+            updateCatalog, updateRetele, updateProp, updateExpConfig, updateGoogleSpreadsheetId, updateGoogleSheetName, updateGoogleAppsScriptUrl,
+            confirmAction, openModal, modal, closeModal 
+        } = useApp();
         const arrSectoare = Helpers.sortByOrder(Object.values(dbSectoare));
         
         const containerRef = useRef(null);
         const dataRef = useRef(arrSectoare);
+        const fileInputRef = useRef(null);
         dataRef.current = arrSectoare;
         const [newSect, setNewSect] = useState({ nume: '', culoare: CONFIG.COLORS.DEFAULT_SECTOR });
-       
+
+        const applySettingsBackup = async (data) => {
+            if (data.catalogCategorii) updateCatalog(data.catalogCategorii);
+            if (data.reteleMagazine) updateRetele(data.reteleMagazine);
+            if (data.proprietatiMagazine) updateProp(data.proprietatiMagazine);
+            if (data.expConfigs) {
+                for (const key of ['global', 'sector', 'store']) {
+                    if (data.expConfigs[key]) {
+                        const cfg = data.expConfigs[key];
+                        updateExpConfig(key, Math.max(0, parseInt(cfg.val) || 0), cfg.unit || 'zile');
+                    }
+                }
+            }
+            if (data.googleSpreadsheetId !== undefined) updateGoogleSpreadsheetId(data.googleSpreadsheetId);
+            if (data.googleSheetName !== undefined) updateGoogleSheetName(data.googleSheetName);
+            if (data.googleAppsScriptUrl !== undefined) updateGoogleAppsScriptUrl(data.googleAppsScriptUrl);
+        };
+
+        const applyStructureBackup = async (data) => {
+            const sectoare = Array.isArray(data.sectoare) ? data.sectoare : [];
+            const magazine = Array.isArray(data.magazine) ? data.magazine : [];
+            const batchSize = 450;
+
+            const deleteAllDocs = async (collectionName) => {
+                const snap = await db.collection(collectionName).get();
+                const refs = [];
+                snap.forEach(doc => refs.push(doc.ref));
+                for (let i = 0; i < refs.length; i += batchSize) {
+                    const batch = db.batch();
+                    refs.slice(i, i + batchSize).forEach(ref => batch.delete(ref));
+                    await batch.commit();
+                }
+            };
+
+            await deleteAllDocs('sectoare');
+            await deleteAllDocs('magazine');
+
+            for (let i = 0; i < sectoare.length; i += batchSize) {
+                const batch = db.batch();
+                sectoare.slice(i, i + batchSize).forEach(item => {
+                    if (item && item.id) batch.set(db.collection('sectoare').doc(item.id), item);
+                });
+                await batch.commit();
+            }
+            for (let i = 0; i < magazine.length; i += batchSize) {
+                const batch = db.batch();
+                magazine.slice(i, i + batchSize).forEach(item => {
+                    if (item && item.id) batch.set(db.collection('magazine').doc(item.id), item);
+                });
+                await batch.commit();
+            }
+        };
+
+        const handleImportFile = async (file) => {
+            if (!file) return;
+            try {
+                const raw = await file.text();
+                const data = JSON.parse(raw);
+                const backupType = data.backupType || (data.catalogCategorii ? 'settings' : (data.sectoare && data.magazine ? 'sectors_stores' : null));
+                if (!backupType) {
+                    alert('Fișierul nu pare a fi o copie de rezervă validă.');
+                    return;
+                }
+                if (backupType === 'settings') {
+                    confirmAction(
+                        'Import setări',
+                        'Acest fișier va restabili rețelele, proprietățile, produsele și termenele de expirare din Setări. Continui?',
+                        async () => { await applySettingsBackup(data); }
+                    );
+                } else if (backupType === 'sectors_stores') {
+                    confirmAction(
+                        'Import sectoare și magazine',
+                        'Acest fișier va adăuga/înlocui sectoarele și magazinele din copie de rezervă. Continui?',
+                        async () => { await applyStructureBackup(data); }
+                    );
+                } else {
+                    alert('Tipul fișierului de backup nu este recunoscut.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Nu am putut citi fișierul selectat.');
+            } finally {
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            }
+        };
 
         useEffect(() => {
             if (containerRef.current) {
@@ -735,7 +770,8 @@
 
         return (
             <div className="animate-fade-in pb-[100px]">
-                <FrozenHeader title="LIADA" bgColor={CONFIG.COLORS.LIADA_HEADER} actions={<ButtonIcon icon="fas fa-cog text-white" onClick={() => setView({page: PAGES.SETTINGS})} />} nav={<React.Fragment></React.Fragment>} />
+                <FrozenHeader title="LIADA" bgColor={CONFIG.COLORS.LIADA_HEADER} actions={<div className="flex items-center gap-1"><ButtonIcon icon="fas fa-file-import text-white" onClick={() => fileInputRef.current?.click()} /><ButtonIcon icon="fas fa-file-export text-white" onClick={() => openModal(MODAL_TYPES.EXPORT_BACKUP)} /><ButtonIcon icon="fas fa-cog text-white" onClick={() => setView({page: PAGES.SETTINGS})} /></div>} nav={<React.Fragment></React.Fragment>} />
+                <input ref={fileInputRef} type="file" accept="application/json,.json" className="hidden" onChange={(e) => handleImportFile(e.target.files?.[0])} />
                 
                 {/* w-full face ca chenarele sectoarelor să aibă exact aceeași lățime/margini ca și headerul Freeze 'LIADA' */}
                 <div className="w-full" ref={containerRef}>
@@ -1210,7 +1246,7 @@
     };
 
     const SettingsPage = () => {
-        const { setView, theme, setTheme, reteleMagazine, updateRetele, proprietatiMagazine, updateProp, catalogCategorii, updateCatalog, promptAction, confirmAction, openModal, modal, closeModal, googleSpreadsheetId, updateGoogleSpreadsheetId, googleSheetName, updateGoogleSheetName, googleClientId, updateGoogleClientId, googleAppsScriptUrl, updateGoogleAppsScriptUrl, googleSyncMethod, updateGoogleSyncMethod, gUser, gToken, gSignIn, gSignOut } = useApp();
+        const { setView, theme, setTheme, reteleMagazine, updateRetele, proprietatiMagazine, updateProp, catalogCategorii, updateCatalog, promptAction, confirmAction, openModal, modal, closeModal, googleSpreadsheetId, updateGoogleSpreadsheetId, googleSheetName, updateGoogleSheetName, googleAppsScriptUrl, updateGoogleAppsScriptUrl } = useApp();
         const [newRet, setNewRet] = useState({ nume: '', culoare: CONFIG.COLORS.DEFAULT_SECTOR });
         const [newProp, setNewProp] = useState('');
 
@@ -1395,46 +1431,19 @@
                         <span>Sincronizare Google Sheets</span>
                     </div>
 
-                    {/* Selector metodă sincronizare */}
-                    <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1.5 rounded-xl mb-4 text-[0.8rem] font-bold">
-                        <button
-                            type="button"
-                            onClick={() => updateGoogleSyncMethod('script')}
-                            className={`flex-1 py-1.5 px-3 rounded-lg border-none cursor-pointer text-center transition-all ${
-                                googleSyncMethod === 'script'
-                                ? 'bg-white dark:bg-gray-700 text-emerald-600 dark:text-emerald-300 shadow-sm'
-                                : 'bg-transparent text-text-sec'
-                            }`}
-                        >
-                            <i className="fas fa-code mr-1"></i> Apps Script (Recomandat)
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => updateGoogleSyncMethod('oauth')}
-                            className={`flex-1 py-1.5 px-3 rounded-lg border-none cursor-pointer text-center transition-all ${
-                                googleSyncMethod === 'oauth'
-                                ? 'bg-white dark:bg-gray-700 text-emerald-600 dark:text-emerald-300 shadow-sm'
-                                : 'bg-transparent text-text-sec'
-                            }`}
-                        >
-                            <i className="fas fa-key mr-1"></i> Google OAuth
-                        </button>
-                    </div>
-
-                    {googleSyncMethod === 'script' ? (
-                        <div className="space-y-3">
-                            <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/10 rounded-xl border border-emerald-100/40 dark:border-emerald-900/10 text-[0.8rem] text-text-sec space-y-2 text-justify">
-                                <p className="font-bold text-emerald-700 dark:text-emerald-400">
-                                    <i className="fas fa-info-circle mr-1"></i> Metoda Google Apps Script
-                                </p>
-                                <p>Recomandat în AI Studio. Permite scrierea directă, ocolind complet pop-up-utile blocate sau expirările de token-uri.</p>
-                                <details className="cursor-pointer font-bold text-emerald-600 dark:text-emerald-500 text-[0.75rem] outline-none">
-                                    <summary className="hover:opacity-85 select-none my-1">Instrucțiuni configurare pas-cu-pas</summary>
-                                    <ol className="list-decimal pl-4 mt-2 mb-2 space-y-2 font-normal text-[0.75rem] text-text-sec text-left">
-                                        <li>Deschide fișierul tău Google Sheets dorit.</li>
-                                        <li>Din meniul de sus, selectează <strong>Extensii (Extensions) &gt; Apps Script</strong>.</li>
-                                        <li>Șterge codul implicit de acolo și lipește următorul script de înregistrare:
-                                            <pre className="p-2 border border-border-color bg-gray-50 dark:bg-gray-900 text-slate-800 dark:text-slate-200 rounded-lg font-mono text-[0.65rem] overflow-x-auto select-all max-h-32 mt-1 whitespace-pre unicode-bidi overflow-y-auto">
+                    <div className="space-y-3">
+                        <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/10 rounded-xl border border-emerald-100/40 dark:border-emerald-900/10 text-[0.8rem] text-text-sec space-y-2 text-justify">
+                            <p className="font-bold text-emerald-700 dark:text-emerald-400">
+                                <i className="fas fa-info-circle mr-1"></i> Metoda Google Apps Script
+                            </p>
+                            <p>Recomandat în AI Studio. Permite scrierea directă, ocolind complet pop-up-utile blocate sau expirările de token-uri.</p>
+                            <details className="cursor-pointer font-bold text-emerald-600 dark:text-emerald-500 text-[0.75rem] outline-none">
+                                <summary className="hover:opacity-85 select-none my-1">Instrucțiuni configurare pas-cu-pas</summary>
+                                <ol className="list-decimal pl-4 mt-2 mb-2 space-y-2 font-normal text-[0.75rem] text-text-sec text-left">
+                                    <li>Deschide fișierul tău Google Sheets dorit.</li>
+                                    <li>Din meniul de sus, selectează <strong>Extensii (Extensions) &gt; Apps Script</strong>.</li>
+                                    <li>Șterge codul implicit de acolo și lipește următorul script de înregistrare:
+                                        <pre className="p-2 border border-border-color bg-gray-50 dark:bg-gray-900 text-slate-800 dark:text-slate-200 rounded-lg font-mono text-[0.65rem] overflow-x-auto select-all max-h-32 mt-1 whitespace-pre unicode-bidi overflow-y-auto">
 {`function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
@@ -1443,286 +1452,197 @@
     var rows = sheet.getDataRange().getValues();
     if (rows.length === 0) return ContentService.createTextOutput(JSON.stringify({error: "Documentul selectat este gol."})).setMimeType(ContentService.MimeType.JSON);
 
-    // Funcție robustă de normalizare (elimină diacritice, spații, puncte etc.)
+    // Funcție robustă de normalizare
     var clean = function(str) {
       if (!str) return "";
       return String(str)
         .toLowerCase()
         .replace(/[ăâ]/g, "a")
         .replace(/[î]/g, "i")
-        .replace(/[ș]/g, "s")
-        .replace(/[ț]/g, "t")
+        .replace(/[șş]/g, "s")
+        .replace(/[țţ]/g, "t")
         .replace(/[^a-z0-9]/g, "");
     };
 
-    var prodNumeClean = clean(data.prodNume);
     var magAdresaClean = clean(data.magAdresa);
     var magNumeClean = clean(data.magNume);
 
-    // 1. Căutăm produsul în rândul 2 (index 1) cu fallback la rândul 1 (index 0).
-    // Deoarece coloana A (index 0) conține numele magazinului și coloana B (index 1) conține adresa,
-    // produsele sunt amplasate obligatoriu începând de la coloana C (index 2).
-    // Deși începem căutarea de la indexul 2, folosim și o listă de cuvinte de ignorat pentru un plus de siguranță.
-    var colIdx = -1;
-    var productRow = rows[1] || rows[0] || [];
-    
     var isIgnoredColumn = function(text) {
       if (!text) return true;
       var cleanCol = clean(text);
       var ignored = ["magazin", "adresa", "nume", "nr", "crt", "index", "id", "localitate", "judet", "route", "telefon", "cod", "client", "mag", "adr"];
       for (var i = 0; i < ignored.length; i++) {
-        if (cleanCol === ignored[i] || cleanCol.indexOf(ignored[i]) !== -1) return true;
+        if (cleanCol === ignored[i]) return true;
       }
       return false;
     };
 
-    // Pasul 1: Căutăm potrivire EXACTĂ a numelui de produs (de la coloana C încolo, index 2)
-    for (var c = 2; c < productRow.length; c++) {
-      var cellVal = clean(productRow[c]);
-      if (cellVal && !isIgnoredColumn(productRow[c]) && cellVal === prodNumeClean) {
-        colIdx = c;
-        break;
+    var getMatchScore = function(cellText, prodNume) {
+      if (!cellText || !prodNume) return 0;
+      var cText = String(cellText).toLowerCase();
+      var pText = String(prodNume).toLowerCase();
+      if (cText === pText) return 100;
+      var norm = function(s) {
+        return s.normalize("NFD")
+                .replace(/[̀-ͯ]/g, "")
+                .replace(/[ăâ]/g, "a")
+                .replace(/[î]/g, "i")
+                .replace(/[șş]/g, "s")
+                .replace(/[țţ]/g, "t")
+                .replace(/[^a-z0-9 ]/g, " ")
+                .replace(/s+/g, " ")
+                .trim();
+      };
+      var nCell = norm(cText);
+      var nProd = norm(pText);
+      if (nCell === nProd) return 95;
+      var compCell = nCell.replace(/s/g, "");
+      var compProd = nProd.replace(/s/g, "");
+      if (compCell === compProd) return 90;
+      if (compCell.indexOf(compProd) !== -1 || compProd.indexOf(compCell) !== -1) return 80;
+      var getWords = function(s) { return s.split(" ").filter(function(w) { return w.length >= 2; }); };
+      var cellWords = getWords(nCell);
+      var prodWords = getWords(nProd);
+      if (cellWords.length === 0 || prodWords.length === 0) return 0;
+      var matches = 0;
+      for (var i = 0; i < prodWords.length; i++) {
+        if (cellWords.indexOf(prodWords[i]) !== -1) matches++;
       }
-    }
-
-    // Pasul 2: Căutăm potrivire PARȚIALĂ robustă (de la coloana C încolo, index 2)
-    if (colIdx === -1) {
-      for (var c = 2; c < productRow.length; c++) {
-        var cellVal = clean(productRow[c]);
-        if (cellVal && !isIgnoredColumn(productRow[c])) {
-          // Permitem potriviri doar dacă lungimile ambelor șiruri sunt de cel puțin 3 caractere relevate pentru a preveni coliziuni greșite
-          if (cellVal.length >= 3 && prodNumeClean.length >= 3) {
-            if (cellVal.indexOf(prodNumeClean) !== -1 || prodNumeClean.indexOf(cellVal) !== -1) {
-              colIdx = c;
-              break;
-            }
-          }
-        }
+      if (matches > 0) {
+        var ratio = matches / Math.max(cellWords.length, prodWords.length);
+        return Math.floor(ratio * 70); 
       }
-    }
+      return 0;
+    };
 
-    // Fallback secundar pe primul rând (index 0), căutând tot de la coloana C (index 2) încolo
-    if (colIdx === -1 && rows[0]) {
-      var firstRow = rows[0];
-      for (var c = 2; c < firstRow.length; c++) {
-        var cellVal = clean(firstRow[c]);
-        if (cellVal && !isIgnoredColumn(firstRow[c]) && cellVal === prodNumeClean) {
+    // 1. Căutare produs
+    var colIdx = -1;
+    var bestColScore = 0;
+    var rowsToSearch = [];
+    if (rows[0]) rowsToSearch.push({rowIdx: 0, data: rows[0]});
+    if (rows[1]) rowsToSearch.push({rowIdx: 1, data: rows[1]});
+
+    for (var rIdx = 0; rIdx < rowsToSearch.length; rIdx++) {
+      var searchRow = rowsToSearch[rIdx].data;
+      for (var c = 2; c < searchRow.length; c++) {
+        var cellContent = searchRow[c];
+        if (!cellContent || isIgnoredColumn(cellContent)) continue;
+        var score = getMatchScore(cellContent, data.prodNume);
+        if (score > bestColScore && score >= 20) {
+          bestColScore = score;
           colIdx = c;
-          break;
-        }
-      }
-      if (colIdx === -1) {
-        for (var c = 2; c < firstRow.length; c++) {
-          var cellVal = clean(firstRow[c]);
-          if (cellVal && !isIgnoredColumn(firstRow[c]) && cellVal.length >= 3 && prodNumeClean.length >= 3) {
-            if (cellVal.indexOf(prodNumeClean) !== -1 || prodNumeClean.indexOf(cellVal) !== -1) {
-              colIdx = c;
-              break;
-            }
-          }
         }
       }
     }
 
-    // Fallback extrem: dacă nu se găsește deloc din coloana C (index 2), dar cumva se găsește pe coloana B (index 1) o potrivire perfectă și doar dacă aceasta nu conține cuvinte de ignorat
-    if (colIdx === -1 && productRow.length > 1) {
-      var cellVal = clean(productRow[1]);
-      if (cellVal && !isIgnoredColumn(productRow[1]) && cellVal === prodNumeClean) {
-        colIdx = 1;
-      }
-    }
+    if (colIdx === -1) return ContentService.createTextOutput(JSON.stringify({error: "Nu am găsit produsul"})).setMimeType(ContentService.MimeType.JSON);
 
-    if (colIdx === -1) {
-      return ContentService.createTextOutput(JSON.stringify({error: "Nu am găsit produsul în antetul coloanelor din Google Sheets: " + data.prodNume})).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    // 2. Căutăm magazinul începând de la rândul 3 (index 2) pentru a nu confunda cu antetele rândurilor 1 sau 2
+    // 2. Căutare magazin
     var rowIdx = -1;
     var bestRowIdx = -1;
     var bestScore = 0;
-
     for (var r = 2; r < rows.length; r++) {
       var currentRow = rows[r] || [];
-      var cellNume = clean(currentRow[0] || "");
-      var cellAddr = clean(currentRow[1] || "");
-
+      var cellColA = clean(currentRow[0] || "");
+      var cellColB = clean(currentRow[1] || "");
       var currentScore = 0;
-
-      // Verificăm potrivirea pe adresa magazinului (prioritate maximă)
-      if (magAdresaClean && cellAddr) {
-        if (cellAddr === magAdresaClean) {
-          currentScore += 80; // Potrivire perfectă pe adresă
-        } else if (cellAddr.length >= 4 && magAdresaClean.length >= 4) {
-          if (cellAddr.indexOf(magAdresaClean) !== -1 || magAdresaClean.indexOf(cellAddr) !== -1) {
-            currentScore += 40; // Potrivire parțială suficient de lungă pe adresă
-          }
-        }
+      if (cellColB) {
+        var hasNume = (magNumeClean && cellColB.indexOf(magNumeClean) !== -1);
+        var hasAdresa = (magAdresaClean && cellColB.indexOf(magAdresaClean) !== -1);
+        if (hasNume && hasAdresa) currentScore = 100;
+        else if (hasAdresa) currentScore = 80;
+        else if (hasNume) currentScore = 15;
       }
-
-      // Verificăm potrivirea pe numele magazinului
-      if (magNumeClean && cellNume) {
-        if (cellNume === magNumeClean) {
-          currentScore += 50; // Potrivire perfectă pe nume
-        } else if (cellNume.length >= 4 && magNumeClean.length >= 4) {
-          if (cellNume.indexOf(magNumeClean) !== -1 || magNumeClean.indexOf(cellNume) !== -1) {
-            if (cellNume === "linella") {
-              currentScore += 5; // Pentru a evita potriviri greșite automate pe cuvântul generic "linella"
-            } else {
-              currentScore += 20; // Potrivire parțială pe nume
-            }
-          }
-        }
+      var legacyScore = 0;
+      if (cellColA && cellColB) {
+        if (magNumeClean && cellColA.indexOf(magNumeClean) !== -1 && magAdresaClean && cellColB.indexOf(magAdresaClean) !== -1) legacyScore = 90;
+        else if (magAdresaClean && cellColB.indexOf(magAdresaClean) !== -1) legacyScore = 75;
       }
-
-      // Bonus major dacă se potrivesc și numele și adresa
-      if (magAdresaClean && cellAddr && magNumeClean && cellNume) {
-        if (
-          (cellAddr === magAdresaClean || cellAddr.indexOf(magAdresaClean) !== -1 || magAdresaClean.indexOf(cellAddr) !== -1) &&
-          (cellNume === magNumeClean || cellNume.indexOf(magNumeClean) !== -1 || magNumeClean.indexOf(cellNume) !== -1)
-        ) {
-          currentScore += 50;
-        }
-      }
-
-      if (currentScore > bestScore && currentScore >= 15) {
-        bestScore = currentScore;
-        bestRowIdx = r;
-      }
+      var finalScore = Math.max(currentScore, legacyScore);
+      if (finalScore > bestScore && finalScore >= 70) { bestScore = finalScore; bestRowIdx = r; }
     }
 
     if (bestRowIdx !== -1) {
       rowIdx = bestRowIdx;
     } else {
-      // Dacă magazinul nu a fost găsit deloc, adăugăm o linie nouă: Magazinul în A, Adresa în B
-      sheet.appendRow([data.magNume, data.magAdresa]);
-      rows = sheet.getDataRange().getValues();
-      rowIdx = rows.length - 1;
+      var firstEmptyBIdx = -1;
+      for (var r = 2; r < rows.length; r++) { if (!(String(rows[r][1] || "").trim())) { firstEmptyBIdx = r; break; } }
+      if (firstEmptyBIdx !== -1) {
+        rowIdx = firstEmptyBIdx;
+        sheet.getRange(rowIdx + 1, 2).setValue(data.magNume + " - " + data.magAdresa);
+      } else {
+        sheet.appendRow(["", data.magNume + " - " + data.magAdresa]);
+        rowIdx = sheet.getLastRow() - 1;
+      }
     }
 
-    // Înscriem stocul la intersecție
-    sheet.getRange(rowIdx + 1, colIdx + 1).setValue(data.stocMan + " (" + data.dateStr + ")");
-    return ContentService.createTextOutput(JSON.stringify({success: true, row: rowIdx + 1, col: colIdx + 1})).setMimeType(ContentService.MimeType.JSON);
+    // 3. Stilizare Corectată (Aici am schimbat API-ul)
+    var cell = sheet.getRange(rowIdx + 1, colIdx + 1);
+    cell.clearFormat(); // Eliminăm vechile stiluri
+    
+    var valueStr = String(data.stocMan);
+    var dateFullStr = " (" + data.dateStr + ")";
+    var fullText = valueStr + dateFullStr;
+
+    try {
+      var richTextBuilder = SpreadsheetApp.newRichTextValue().setText(fullText);
+
+      // Stil Roșu Bold (folosim newTextStyle + setForegroundColor)
+      var redBoldStyle = SpreadsheetApp.newTextStyle()
+        .setBold(true)
+        .setForegroundColor("#ff0000")
+        .build();
+      richTextBuilder.setTextStyle(0, valueStr.length, redBoldStyle);
+
+      // Stil Negru Normal
+      var blackStyle = SpreadsheetApp.newTextStyle()
+        .setBold(false)
+        .setForegroundColor("#000000")
+        .build();
+      richTextBuilder.setTextStyle(valueStr.length, fullText.length, blackStyle);
+
+      cell.setRichTextValue(richTextBuilder.build());
+    } catch (errRich) {
+      cell.setValue(fullText);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({success: true})).setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
     return ContentService.createTextOutput(JSON.stringify({error: err.toString()})).setMimeType(ContentService.MimeType.JSON);
   }
 }`}
-                                            </pre>
-                                        </li>
-                                        <li>Clic sus pe <strong>Trimiteți (Deploy) &gt; Implementare nouă (New deployment)</strong>.</li>
-                                        <li>Apăsați rotița din colțul stânga sus al ferestrei de deploy, alegeți tipul <strong>Aplicație web (Web app)</strong>.</li>
-                                        <li>Configurați: Execute ca: <strong>Eu (Me)</strong>, Cine are acces: <strong>Oricine (Anyone)</strong>. Apăsați <strong>Trimite (Deploy)</strong> și autorizați accesul.</li>
-                                        <li>Copiați <strong>Adresa URL a aplicației web (Web app URL)</strong> generată și introduceți-o în câmpul de mai jos!</li>
-                                    </ol>
-                                </details>
-                            </div>
-
-                            <div>
-                                <label className="block text-[0.75rem] font-bold uppercase text-text-sec tracking-wide mb-1">Adresă URL Google Apps Script</label>
-                                <input 
-                                    type="text" 
-                                    placeholder="https://script.google.com/macros/s/.../exec"
-                                    className="w-full bg-transparent border border-border-color dark:border-dark-border rounded-xl p-2.5 text-[0.85rem] outline-none focus:border-accent text-text-main dark:text-white"
-                                    value={googleAppsScriptUrl}
-                                    onChange={e => updateGoogleAppsScriptUrl(e.target.value)}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-[0.75rem] font-bold uppercase text-text-sec tracking-wide mb-1">Numele Tab-ului (Sheet Name)</label>
-                                <input 
-                                    type="text" 
-                                    placeholder="Implicit: Sheet1"
-                                    className="w-full bg-transparent border border-border-color dark:border-dark-border rounded-xl p-2.5 text-[0.85rem] outline-none focus:border-accent text-text-main dark:text-white"
-                                    value={googleSheetName}
-                                    onChange={e => updateGoogleSheetName(e.target.value)}
-                                />
-                            </div>
+                                        </pre>
+                                    </li>
+                                    <li>Clic sus pe <strong>Trimiteți (Deploy) &gt; Implementare nouă (New deployment)</strong>.</li>
+                                    <li>Apăsați rotița din colțul stânga sus al ferestrei de deploy, alegeți tipul <strong>Aplicație web (Web app)</strong>.</li>
+                                    <li>Configurați: Execute ca: <strong>Eu (Me)</strong>, Cine are acces: <strong>Oricine (Anyone)</strong>. Apăsați <strong>Trimite (Deploy)</strong> și autorizați accesul.</li>
+                                    <li>Copiați <strong>Adresa URL a aplicației web (Web app URL)</strong> generată și introduceți-o în câmpul de mai jos!</li>
+                                </ol>
+                            </details>
                         </div>
-                    ) : (
-                        <div className="space-y-3">
-                            <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
-                                <div className="text-[0.8rem] text-text-sec mb-2 text-justify">
-                                    Permite conectarea securizată cu Google Sheets. Este necesar un Client ID setat în Google Cloud Console.
-                                </div>
-                                {gUser ? (
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            {gUser.photoURL ? (
-                                                <img src={gUser.photoURL} className="w-8 h-8 rounded-full border border-emerald-500" alt="avatar" />
-                                            ) : (
-                                                <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center font-bold">
-                                                    {gUser.displayName ? gUser.displayName[0] : 'G'}
-                                                </div>
-                                            )}
-                                            <div className="flex flex-col">
-                                                <span className="text-[0.85rem] font-bold truncate max-w-[150px]">{gUser.displayName || 'Utilizator Google'}</span>
-                                                <span className="text-[0.75rem] text-text-sec truncate max-w-[150px]">{gUser.email}</span>
-                                            </div>
-                                        </div>
-                                        <button 
-                                            onClick={gSignOut}
-                                            className="px-3 py-1.5 bg-red-50 dark:bg-red-950/20 text-danger hover:opacity-85 text-[0.75rem] font-bold rounded-lg cursor-pointer transition-all border-none"
-                                        >
-                                            Delogare
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <button 
-                                        onClick={gSignIn}
-                                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 shadow-sm border-none text-[0.85rem]"
-                                    >
-                                        <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                                            <path d="M12.24 10.285V13.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.859-3.578-7.859-8s3.529-8 7.859-8c2.46 0 4.105 1.025 5.047 1.926l2.427-2.334C17.955 2.192 15.34 1 12.24 1 6.033 1 12.24s5.033 11.24 11.24 11.24c6.478 0 10.793-4.537 10.793-10.985 0-.74-.078-1.3-.173-1.86H12.24z"/>
-                                        </svg>
-                                        Conectează Google Sheets
-                                    </button>
-                                )}
-                            </div>
 
-                            <div>
-                                <label className="block text-[0.75rem] font-bold uppercase text-text-sec tracking-wide mb-1">Google OAuth Client ID</label>
-                                <input 
-                                    type="text" 
-                                    placeholder="Exemplu: 593813959828-abc.apps.googleusercontent.com"
-                                    className="w-full bg-transparent border border-border-color dark:border-dark-border rounded-xl p-2.5 text-[0.85rem] outline-none focus:border-accent text-text-main dark:text-white font-mono text-[0.75rem]"
-                                    value={googleClientId}
-                                    onChange={e => updateGoogleClientId(e.target.value)}
-                                />
-                                <p className="text-[0.68rem] text-text-sec mt-1 px-1">
-                                    Pentru utilizare, se adaugă <span className="font-mono bg-gray-100 dark:bg-gray-800 p-0.5 rounded text-accent select-all">{window.location.origin}</span> ca și <strong>URI Redirect Autorizat</strong> în Google Console.
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-[0.75rem] font-bold uppercase text-text-sec tracking-wide mb-1">ID Document (Spreadsheet ID)</label>
-                                <input 
-                                    type="text" 
-                                    placeholder="ID-ul tabelului sau adresa URL completă"
-                                    className="w-full bg-transparent border border-border-color dark:border-dark-border rounded-xl p-2.5 text-[0.85rem] outline-none focus:border-accent text-text-main dark:text-white"
-                                    value={googleSpreadsheetId}
-                                    onChange={e => {
-                                        let val = e.target.value;
-                                        const match = val.match(/\/d\/([a-zA-Z0-9-_]+)/);
-                                        if (match && match[1]) {
-                                            val = match[1];
-                                        }
-                                        updateGoogleSpreadsheetId(val);
-                                    }}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-[0.75rem] font-bold uppercase text-text-sec tracking-wide mb-1">Numele Tab-ului (Sheet Name)</label>
-                                <input 
-                                    type="text" 
-                                    placeholder="Implicit: Sheet1"
-                                    className="w-full bg-transparent border border-border-color dark:border-dark-border rounded-xl p-2.5 text-[0.85rem] outline-none focus:border-accent text-text-main dark:text-white"
-                                    value={googleSheetName}
-                                    onChange={e => updateGoogleSheetName(e.target.value)}
-                                />
-                            </div>
+                        <div>
+                            <label className="block text-[0.75rem] font-bold uppercase text-text-sec tracking-wide mb-1">Adresă URL Google Apps Script</label>
+                            <input 
+                                type="text" 
+                                placeholder="https://script.google.com/macros/s/.../exec"
+                                className="w-full bg-transparent border border-border-color dark:border-dark-border rounded-xl p-2.5 text-[0.85rem] outline-none focus:border-accent text-text-main dark:text-white"
+                                value={googleAppsScriptUrl}
+                                onChange={e => updateGoogleAppsScriptUrl(e.target.value)}
+                            />
                         </div>
-                    )}
+
+                        <div>
+                            <label className="block text-[0.75rem] font-bold uppercase text-text-sec tracking-wide mb-1">Numele Tab-ului (Sheet Name)</label>
+                            <input 
+                                type="text" 
+                                placeholder="Implicit: Sheet1"
+                                className="w-full bg-transparent border border-border-color dark:border-dark-border rounded-xl p-2.5 text-[0.85rem] outline-none focus:border-accent text-text-main dark:text-white"
+                                value={googleSheetName}
+                                onChange={e => updateGoogleSheetName(e.target.value)}
+                            />
+                        </div>
+                    </div>
                 </Card>
 
                 <Card>
@@ -2519,7 +2439,7 @@
     };
 
     const ProductPage = () => {
-        const { view, setView, catalogCategorii, dbMagazine, dbProduse, dbLoturi, confirmAction, modal, openModal, closeModal, googleSpreadsheetId, googleSheetName, googleClientId, googleAppsScriptUrl, googleSyncMethod, gUser, gToken, gSignIn } = useApp();
+        const { view, setView, catalogCategorii, dbMagazine, dbProduse, dbLoturi, confirmAction, modal, openModal, closeModal, googleSpreadsheetId, googleSheetName, googleAppsScriptUrl } = useApp();
         
         const rawProd = view.data;
         const prod = { ...rawProd, ...(dbProduse[rawProd.id] || {}) }; 
@@ -2544,20 +2464,8 @@
         const totalVitrina = loturiCurente.reduce((sum, l) => sum + (parseInt(l.cantitate)||0), 0);
         
         // Stoc Manual & Depozit (Inițializare smart pt 0 gol)
-      // 1. State-urile necesare
-const [stocMan, setStocMan] = useState(prod.stocManual !== undefined ? prod.stocManual : '');
-const [tempStoc, setTempStoc] = useState(stocMan.toString());
-
-// 2. useEffect-ul tău original (Modificat doar puțin ca să accepte "0" ca text)
-useEffect(() => { 
-    // În loc de '', punem "0" ca string pentru a preveni "golirea" inputului
-    setStocMan(prod.stocManual === 0 ? "0" : (prod.stocManual || "0")); 
-}, [prod.stocManual]);
-
-// 3. Noul useEffect (Face legătura între stocMan și tempStoc)
-useEffect(() => {
-    setTempStoc(stocMan.toString());
-}, [stocMan]);
+        const [stocMan, setStocMan] = useState(prod.stocManual === 0 ? 0 : (prod.stocManual || ''));
+        useEffect(() => { setStocMan(prod.stocManual === 0 ? 0 : (prod.stocManual || '')); }, [prod.stocManual]);
 
         const [depozit, setDepozit] = useState(prod.depozit || '');
         useEffect(() => { setDepozit(prod.depozit || ''); }, [prod.depozit]);
@@ -2570,12 +2478,11 @@ useEffect(() => {
 
         const [isSyncing, setIsSyncing] = useState(false);
 
-      const saveStockToGoogleSheets = async () => {
-    // MODIFICARE: Verificăm dacă este string gol, dar acceptăm "0"
-    if (stocMan === '') { 
-        alert("Introduceți o cifră validă la stoc manual înainte de a trimite.");
-        return;
-    }
+        const saveStockToGoogleSheets = async () => {
+            if (stocMan === undefined || stocMan === null || stocMan === '') {
+                alert("Introduceți o cifră validă la stoc manual înainte de a trimite.");
+                return;
+            }
 
             // Generăm formatul datei cerut: zz.ll.aa în paranteze după numărul introdus
             const d = new Date();
@@ -2584,338 +2491,48 @@ useEffect(() => {
             const aa = String(d.getFullYear()).slice(-2);
             const formatData = `${zz}.${ll}.${aa}`;
 
-            if (googleSyncMethod === 'script') {
-                if (!googleAppsScriptUrl) {
-                    alert("Adresa URL Google Apps Script nu este configurată. Vă rugăm să o adăugați mai întâi în ecranul de Setări.");
-                    return;
-                }
-                setIsSyncing(true);
-                try {
-                    // Trimitere către Google Apps Script ca text/plain pentru a ocoli preflight CORS în mod securizat
-                    const res = await fetch(googleAppsScriptUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'text/plain;charset=utf-8'
-                        },
-                        body: JSON.stringify({
-                            sheetName: googleSheetName || 'Sheet1',
-                            prodNume: prod.nume,
-                            magNume: activeMag.nume,
-                            magAdresa: activeMag.adresa,
-                            stocMan: stocMan,
-                            dateStr: formatData
-                        })
-                    });
-
-                    if (!res.ok) {
-                        throw new Error(`Răspuns server necorespunzător: ${res.statusText}`);
-                    }
-
-                    const resText = await res.text();
-                    let resData;
-                    try {
-                        resData = JSON.parse(resText);
-                    } catch(e) {
-                        throw new Error("Răspunsul primit de la Google Script nu este în format JSON valid.");
-                    }
-
-                    if (resData.error) {
-                        throw new Error(resData.error);
-                    }
-
-                    alert(`Stocul manual (${stocMan}) a fost salvat cu succes în tabelul Google Sheets!`);
-                } catch (err) {
-                    console.error("Eroare Apps Script:", err);
-                    alert(`Eroare la scriere în Sheets (Apps Script): ${err.message}`);
-                } finally {
-                    setIsSyncing(false);
-                }
+            if (!googleAppsScriptUrl) {
+                alert("Adresa URL Google Apps Script nu este configurată. Vă rugăm să o adăugați mai întâi în ecranul de Setări.");
                 return;
             }
-
-            // Metoda OAuth directă (googleSyncMethod === 'oauth')
-            if (!googleSpreadsheetId) {
-                alert("ID-ul documentului Google Sheets nu este configurat. Vă rugăm să îl adăugați mai întâi în ecranul de Setări.");
-                return;
-            }
-
-            let token = gToken;
-            if (!token) {
-                const confirmed = window.confirm("Pentru a înscrie stocul în Google Sheets, trebuie să te autentifici mai întâi cu contul tău Google. Dorești să te autentifici acum?");
-                if (!confirmed) return;
-                try {
-                    token = await gSignIn();
-                } catch (err) {
-                    alert("Autentificarea Google a eșuat. Vă rugăm să încercați din nou.");
-                    return;
-                }
-                if (!token) return;
-            }
-
             setIsSyncing(true);
-
             try {
-                const sheetTab = googleSheetName || 'Sheet1';
-                // 1. Preluăm toate datele din tabel pentru a găsi rândul și coloana corectă
-                const rangeToFetch = `${sheetTab}!A1:ZZ500`;
-                const fetchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${googleSpreadsheetId}/values/${encodeURIComponent(rangeToFetch)}`;
-                
-                const response = await fetch(fetchUrl, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (!response.ok) {
-                    const errData = await response.json();
-                    if (response.status === 401) {
-                        localStorage.removeItem('g_access_token');
-                        const retry = window.confirm("Sesiunea Google a expirat. Doriți să vă reconectați pentru a finaliza trimiterea?");
-                        if (retry) {
-                            const newToken = await gSignIn();
-                            if (newToken) {
-                                setIsSyncing(false);
-                                setTimeout(() => saveStockToGoogleSheets(), 100);
-                                return;
-                            }
-                        }
-                    }
-                    throw new Error(errData.error?.message || "Eroare la preluarea datelor din Google Sheets.");
-                }
-
-                const data = await response.json();
-                const values = data.values || [];
-
-                if (values.length === 0) {
-                    throw new Error("Documentul este gol.");
-                }
-
-                // Funcție robustă de normalizare (elimină diacritice, spații, puncte etc.)
-                const clean = (str) => {
-                    if (!str) return '';
-                    return str.toString()
-                        .toLowerCase()
-                        .normalize('NFD') // Descompune diacriticele (de ex. ș -> s + diacritic)
-                        .replace(/[\u0300-\u036f]/g, '') // Elimină accentele/diacriticele rezultate
-                        .replace(/[ăâ]/g, 'a')
-                        .replace(/[î]/g, 'i')
-                        .replace(/[ș]/g, 's')
-                        .replace(/[ț]/g, 't')
-                        .replace(/[^a-z0-9]/g, ''); // Elimină orice semn de punctuație sau spațiu
-                };
-
-                const prodNumeClean = clean(prod.nume);
-                const magAdresaClean = clean(activeMag.adresa);
-                const magNumeClean = clean(activeMag.nume);
-
-                // 2. Căutăm coloana produsului în rândul 2 (index 1), cu fallback la rândul 1 (index 0).
-                // Deoarece coloana A (index 0) conține numele magazinului și coloana B (index 1) conține adresa,
-                // produsele sunt amplasate obligatoriu începând de la coloana C (index 2).
-                // Deși începem căutarea de la indexul 2, folosim și o listă de cuvinte de ignorat pentru un plus de siguranță.
-                let colIdx = -1;
-                const productRow = values[1] || values[0] || [];
-
-                const isIgnoredColumn = (text) => {
-                    if (!text) return true;
-                    const cleanCol = clean(text);
-                    const ignored = ["magazin", "adresa", "nume", "nr", "crt", "index", "id", "localitate", "judet", "route", "telefon", "cod", "client", "mag", "adr"];
-                    return ignored.some(keyword => cleanCol === keyword || cleanCol.includes(keyword));
-                };
-
-                // Pasul 1: Căutăm potrivire EXACTĂ a numelui de produs (de la coloana C încolo, index 2)
-                for (let c = 2; c < productRow.length; c++) {
-                    const cellVal = clean(productRow[c]);
-                    if (cellVal && !isIgnoredColumn(productRow[c]) && cellVal === prodNumeClean) {
-                        colIdx = c;
-                        break;
-                    }
-                }
-
-                // Pasul 2: Căutăm potrivire PARȚIALĂ robustă (de la coloana C încolo, index 2)
-                if (colIdx === -1) {
-                    for (let c = 2; c < productRow.length; c++) {
-                        const cellVal = clean(productRow[c]);
-                        if (cellVal && !isIgnoredColumn(productRow[c])) {
-                            // Permitem potriviri doar dacă lungimile ambelor șiruri sunt de cel puțin 3 caractere relevate pentru a preveni coliziuni greșite
-                            if (cellVal.length >= 3 && prodNumeClean.length >= 3) {
-                                if (cellVal.includes(prodNumeClean) || prodNumeClean.includes(cellVal)) {
-                                    colIdx = c;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Fallback secundar pe primul rând (index 0), căutând tot de la coloana C (index 2) încolo
-                if (colIdx === -1 && values[0]) {
-                    const fallbackRow = values[0];
-                    for (let c = 2; c < fallbackRow.length; c++) {
-                        const cellVal = clean(fallbackRow[c]);
-                        if (cellVal && !isIgnoredColumn(fallbackRow[c]) && cellVal === prodNumeClean) {
-                            colIdx = c;
-                            break;
-                        }
-                    }
-                    if (colIdx === -1) {
-                        for (let c = 2; c < fallbackRow.length; c++) {
-                            const cellVal = clean(fallbackRow[c]);
-                            if (cellVal && !isIgnoredColumn(fallbackRow[c]) && cellVal.length >= 3 && prodNumeClean.length >= 3) {
-                                if (cellVal.includes(prodNumeClean) || prodNumeClean.includes(cellVal)) {
-                                    colIdx = c;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Fallback extrem: dacă nu se găsește deloc din coloana C (index 2), dar cumva se găsește pe coloana B (index 1) o potrivire perfectă și doar dacă aceasta nu conține cuvinte de ignorat
-                if (colIdx === -1 && productRow.length > 1) {
-                    const cellVal = clean(productRow[1]);
-                    if (cellVal && !isIgnoredColumn(productRow[1]) && cellVal === prodNumeClean) {
-                        colIdx = 1;
-                    }
-                }
-
-                // 3. Căutăm rândul magazinului începând de la rândul 3 (index 2) pentru a nu confunda cu antetele rândurilor 1 sau 2
-                let rowIdx = -1;
-                let bestRowIdx = -1;
-                let bestScore = 0;
-
-                for (let r = 2; r < values.length; r++) {
-                    const currentRow = values[r] || [];
-                    const cellNume = clean(currentRow[0] || '');
-                    const cellAddr = clean(currentRow[1] || '');
-
-                    let currentScore = 0;
-
-                    // Verificăm potrivirea pe adresa magazinului (prioritate maximă)
-                    if (magAdresaClean && cellAddr) {
-                        if (cellAddr === magAdresaClean) {
-                            currentScore += 80; // Potrivire perfectă pe adresă
-                        } else if (cellAddr.length >= 4 && magAdresaClean.length >= 4) {
-                            if (cellAddr.includes(magAdresaClean) || magAdresaClean.includes(cellAddr)) {
-                                currentScore += 40; // Potrivire parțială suficient de lungă pe adresă
-                            }
-                        }
-                    }
-
-                    // Verificăm potrivirea pe numele magazinului
-                    if (magNumeClean && cellNume) {
-                        if (cellNume === magNumeClean) {
-                            currentScore += 50; // Potrivire perfectă pe nume
-                        } else if (cellNume.length >= 4 && magNumeClean.length >= 4) {
-                            if (cellNume.includes(magNumeClean) || magNumeClean.includes(cellNume)) {
-                                if (cellNume === 'linella') {
-                                    currentScore += 5; // Pentru a evita potriviri greșite automate pe cuvântul generic "linella"
-                                } else {
-                                    currentScore += 20; // Potrivire parțială pe nume
-                                }
-                            }
-                        }
-                    }
-
-                    // Bonus major dacă se potrivesc și numele și adresa
-                    if (magAdresaClean && cellAddr && magNumeClean && cellNume) {
-                        if (
-                            (cellAddr === magAdresaClean || cellAddr.includes(magAdresaClean) || magAdresaClean.includes(cellAddr)) &&
-                            (cellNume === magNumeClean || cellNume.includes(magNumeClean) || magNumeClean.includes(cellNume))
-                        ) {
-                            currentScore += 50;
-                        }
-                    }
-
-                    if (currentScore > bestScore && currentScore >= 15) {
-                        bestScore = currentScore;
-                        bestRowIdx = r;
-                    }
-                }
-
-                if (bestRowIdx !== -1) {
-                    rowIdx = bestRowIdx;
-                }
-
-                if (colIdx === -1) {
-                    alert(`Produsul "${prod.nume}" nu a fost găsit în rândul 2 sau rândul 1 al antetului din tabelul Google Sheets.\n\nAsigurați-vă că denumirea se regăsește în capul de tabel.`);
-                    setIsSyncing(false);
-                    return;
-                }
-
-                if (rowIdx === -1) {
-                    // Dacă rândul magazinului nu este găsit, dăm posibilitatea să adăugăm rândul automat!
-                    const createNewRow = window.confirm(`Magazinul "${activeMag.nume}" (${activeMag.adresa || 'Fără adresă'}) nu a fost găsit în tabelul Google Sheets pe nicio linie.\n\nDoriți să adăugăm o linie nouă pentru acest magazin la sfârșitul tabelului (coloana A: Nume, coloana B: Adresă)?`);
-                    if (createNewRow) {
-                        const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${googleSpreadsheetId}/values/${encodeURIComponent(sheetTab)}!A1:append?valueInputOption=USER_ENTERED`;
-                        
-                        // Generăm o listă de dimensiune corespunzătoare
-                        const newRowValues = Array(Math.max(2, colIdx + 1)).fill('');
-                        newRowValues[0] = activeMag.nume;
-                        newRowValues[1] = activeMag.adresa || '';
-                        
-                        const appendRes = await fetch(appendUrl, {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                values: [newRowValues]
-                            })
-                        });
-
-                        if (!appendRes.ok) {
-                            throw new Error("Nu s-a putut genera linie nouă pentru magazin în Google Sheets.");
-                        }
-
-                        alert("S-a adăugat o nouă linie pentru magazin în tabel! Se înregistrează acum cifra...");
-                        setIsSyncing(false);
-                        setTimeout(() => saveStockToGoogleSheets(), 300);
-                        return;
-                    } else {
-                        setIsSyncing(false);
-                        return;
-                    }
-                }
-
-                const cellValueToWrite = `${stocMan} (${formatData})`;
-
-                // Convertor index coloană în literă (0->A, 25->Z, 26->AA)
-                const getColumnLetter = (col) => {
-                    let letter = '';
-                    while (col >= 0) {
-                        letter = String.fromCharCode((col % 26) + 65) + letter;
-                        col = Math.floor(col / 26) - 1;
-                    }
-                    return letter;
-                };
-
-                const columnLetter = getColumnLetter(colIdx);
-                const googleCellCoord = `${sheetTab}!${columnLetter}${rowIdx + 1}`;
-
-                // PUT call pentru actualizarea coordonatei exacte
-                const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${googleSpreadsheetId}/values/${encodeURIComponent(googleCellCoord)}?valueInputOption=USER_ENTERED`;
-                
-                const updateResponse = await fetch(updateUrl, {
-                    method: 'PUT',
+                // Trimitere către Google Apps Script ca text/plain pentru a ocoli preflight CORS în mod securizat
+                const res = await fetch(googleAppsScriptUrl, {
+                    method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'text/plain;charset=utf-8'
                     },
                     body: JSON.stringify({
-                        range: googleCellCoord,
-                        majorDimension: 'ROWS',
-                        values: [[cellValueToWrite]]
+                        sheetName: googleSheetName || 'Sheet1',
+                        prodNume: prod.nume,
+                        magNume: activeMag.nume,
+                        magAdresa: activeMag.adresa,
+                        stocMan: stocMan,
+                        dateStr: formatData
                     })
                 });
 
-                if (!updateResponse.ok) {
-                    const errPayload = await updateResponse.json();
-                    throw new Error(errPayload.error?.message || "Eroare la actualizarea coordonatelor în Google Sheets.");
+                if (!res.ok) {
+                    throw new Error(`Răspuns server necorespunzător: ${res.statusText}`);
                 }
 
-                alert(`Stocul manual (${stocMan}) a fost salvat cu succes în Google Sheets la rândul ${rowIdx + 1}, celula ${columnLetter}${rowIdx + 1}!`);
+                const resText = await res.text();
+                let resData;
+                try {
+                    resData = JSON.parse(resText);
+                } catch(e) {
+                    throw new Error("Răspunsul primit de la Google Script nu este în format JSON valid.");
+                }
+
+                if (resData.error) {
+                    throw new Error(resData.error);
+                }
+
+                alert(`Stocul manual (${stocMan}) a fost salvat cu succes în tabelul Google Sheets!`);
             } catch (err) {
-                console.error(err);
-                alert(`Eroare la sincronizare Sheets: ${err.message}`);
+                console.error("Eroare Apps Script:", err);
+                alert(`Eroare la scriere în Sheets (Apps Script): ${err.message}`);
             } finally {
                 setIsSyncing(false);
             }
@@ -2971,26 +2588,23 @@ useEffect(() => {
                         <div className="bg-bg-color dark:bg-dark-bg p-3 rounded-xl text-center border border-border-color dark:border-dark-border shadow-sm">
                             <span className="block text-[0.8rem] font-bold text-text-sec uppercase tracking-wide mb-1">Stoc (Manual)</span>
                             <div className="flex items-center justify-center gap-1 mt-1">
-                             <input 
-    type="number" 
-    min="0" 
-    placeholder="0" 
-    value={tempStoc} 
-    onChange={(e) => setTempStoc(e.target.value)} 
-    onBlur={(e) => {
-        // Conversie sigură
-        let val = parseInt(e.target.value);
-        if (isNaN(val) || val < 0) val = 0;
-        
-        // Trimite la Firebase
-        FirebaseService.update('produse_magazin', prod.id, { stocManual: val });
-        
-        // TriggerUpdate re-randează componenta, ceea ce va activa 
-        // useEffect-ul tău original și apoi cel nou, sincronizând totul perfect.
-        triggerUpdate();
-    }}
-    className="w-[60%] text-center border-none bg-transparent font-black text-[1.4rem] text-text-main dark:text-white outline-none" 
-/>
+                                <input 
+                                    type="number" min="0" placeholder="0" 
+                                    className="w-[60%] text-center border-none bg-transparent font-black text-[1.4rem] text-text-main dark:text-white outline-none" 
+                                    value={stocMan} 
+                                    onChange={e=>setStocMan(e.target.value)} 
+                                    onBlur={()=>{ 
+                                        if (stocMan === '') {
+                                            setStocMan('');
+                                            FirebaseService.update('produse_magazin', prod.id, { stocManual: null });
+                                        } else {
+                                            let val = parseInt(stocMan); if(isNaN(val)||val<0) val=0; 
+                                            setStocMan(val); 
+                                            FirebaseService.update('produse_magazin', prod.id, { stocManual: val }); 
+                                        }
+                                        triggerUpdate();
+                                    }} 
+                                />
                                 <button 
                                     onClick={saveStockToGoogleSheets} 
                                     disabled={isSyncing}
@@ -3145,8 +2759,9 @@ useEffect(() => {
     // 8. MAIN APP
     // ==========================================
     const MainApp = () => {
-        const { isReady, view, setView, modal, openModal, closeModal, dbMagazine, dbSectoare, reteleMagazine, updateRetele } = useApp();
+        const { isReady, view, setView, modal, openModal, closeModal, dbMagazine, dbSectoare, reteleMagazine, updateRetele, handleExportBackup } = useApp();
         const [editRetState, setEditRetState] = useState({ nume: '', culoare: '' });
+        const [selectedBackupScope, setExportScope] = useState('settings');
         
         useEffect(() => {
             if (modal.type === MODAL_TYPES.EDIT_RET && modal.data) {
@@ -3188,6 +2803,18 @@ useEffect(() => {
                                 closeModal();
                             }
                         }}>Salvează</PrimaryButton>
+                    </div>
+                </BaseModal>
+
+                <BaseModal isOpen={modal.type === MODAL_TYPES.EXPORT_BACKUP} title="Exportă copie de rezervă">
+                    <p className="text-text-main dark:text-white font-medium text-[1rem] mt-0 mb-4">Alege ce vrei să salvezi în fișier.</p>
+                    <Select value={selectedBackupScope} onChange={(e) => setExportScope(e.target.value)}>
+                        <option value="settings">Setări: rețele, detalii, produse și termene</option>
+                        <option value="sectors_stores">Sectoare și magazine</option>
+                    </Select>
+                    <div className="flex gap-3 pt-5">
+                        <SecondaryButton onClick={closeModal}>Anulează</SecondaryButton>
+                        <PrimaryButton onClick={() => { handleExportBackup(selectedBackupScope); closeModal(); }}>Exportă</PrimaryButton>
                     </div>
                 </BaseModal>
 
