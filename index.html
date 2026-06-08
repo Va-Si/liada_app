@@ -264,14 +264,14 @@
                 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0
             );
 
-            return new Sortable(container, {
+           return new Sortable(container, {
                 animation: 150,
-                delay: isTouchDevice ? 250 : 120,
+                delay: 200, // Am redus puțin pentru a evita selectarea textului de către telefon
                 delayOnTouchOnly: true,
-                touchStartThreshold: 15,
+                touchStartThreshold: 3, // Dacă miști degetul mai mult de 3px în timpul celor 200ms, face scroll (nu drag)
                 forceFallback: isTouchDevice,
                 fallbackOnBody: true,
-                fallbackTolerance: 15,
+                fallbackTolerance: 5, // După ce s-a activat prinderea, începe mutarea la o mișcare mică (5px), ca browserul să nu apuce să facă scroll
                 scroll: true,
                 scrollSensitivity: 80,
                 scrollSpeed: 10,
