@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LIADA - Mercantizare (Arhitectură Pro)</title>
+    <title>LIADA</title>
     
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -266,12 +266,12 @@
 
             return new Sortable(container, {
                 animation: 150,
-                delay: isTouchDevice ? 50 : 120,
-                delayOnTouchOnly: false,
-                touchStartThreshold: 4,
+                delay: isTouchDevice ? 250 : 120,
+                delayOnTouchOnly: true,
+                touchStartThreshold: 15,
                 forceFallback: isTouchDevice,
                 fallbackOnBody: true,
-                fallbackTolerance: 4,
+                fallbackTolerance: 15,
                 scroll: true,
                 scrollSensitivity: 80,
                 scrollSpeed: 10,
@@ -2683,15 +2683,13 @@
             }
         };
 
-        const [actualizatData, setActualizatData] = useState(() => {
-            const acum = new Date();
-            return acum.toLocaleDateString('ro-RO') + ' ' + acum.toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'});
-        });
+        // Preluăm data salvată în baza de date specific pentru acest produs
+        const dataAfisareLot = prod.dataUltimulLot 
+            ? new Date(prod.dataUltimulLot).toLocaleDateString('ro-RO') + ' ' + new Date(prod.dataUltimulLot).toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'})
+            : "N/A";
         
-        const triggerUpdate = () => {
-            const acum = new Date();
-            setActualizatData(acum.toLocaleDateString('ro-RO') + ' ' + acum.toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'}));
-        };
+        // Lăsăm funcția goală ca să nu dea eroare dacă este apelată din alte părți
+        const triggerUpdate = () => {};
         
         return (
             <div className="animate-fade-in pb-[100px]">
@@ -2776,7 +2774,7 @@
                     <div className="flex justify-between items-center font-black text-[1.2rem] mb-2">
                         Loturi Valabilitate
                         <div className="flex items-center gap-2">
-                            <span className="text-[0.7rem] font-bold text-text-sec bg-gray-100 dark:bg-gray-800 p-1.5 rounded-lg tracking-tight">Act - {actualizatData}</span>
+                          <span className="text-[0.7rem] font-bold text-text-sec bg-gray-100 dark:bg-gray-800 p-1.5 rounded-lg tracking-tight">Act - {dataAfisareLot}</span>
                             <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-100 dark:!bg-blue-900/50 !rounded-full !p-[6px_8px] !text-[1rem]" onClick={() => { setNewLot({qty: '', data: ''}); openModal(MODAL_TYPES.ADD_LOT); }} />
                         </div>
                     </div>
@@ -2831,7 +2829,12 @@
                                 let expStr = isDrojdii ? newLot.data : Helpers.calculeazaExpirare(newLot.data, catObj);
                                 let prodStr = isDrojdii ? "N/A" : newLot.data;
                                 FirebaseService.add('loturi', {produsId: prod.id, cantitate: valQ, dataProd: prodStr, dataExp: expStr});
-                                triggerUpdate();
+                                
+                                // SALVEAZĂ DATA EXACTĂ CÂND S-A ADĂUGAT LOTUL NOU ÎN PRODUS
+                                FirebaseService.update('produse_magazin', prod.id, { 
+                                    dataUltimulLot: Date.now() 
+                                });
+                                
                                 closeModal();
                             } else { alert('Introduceți măcar data!'); }
                         }}>Salvează</PrimaryButton>
