@@ -2522,6 +2522,8 @@
             setCantitate(val === 0 ? '' : val);
             if (val !== l.cantitate) {
                 FirebaseService.update('loturi', l.id, { cantitate: val });
+                // COD NOU: Actualizează data produsului când se modifică cantitatea
+                FirebaseService.update('produse_magazin', l.produsId, { dataUltimulLot: Date.now() });
                 onUpdate();
             }
         };
@@ -2534,6 +2536,8 @@
             }
             if (dataExp !== l.dataExp) {
                 FirebaseService.update('loturi', l.id, { dataExp });
+                // COD NOU: Actualizează data produsului când se modifică data expirării
+                FirebaseService.update('produse_magazin', l.produsId, { dataUltimulLot: Date.now() });
                 onUpdate();
             }
         };
@@ -2548,6 +2552,8 @@
                 let expCalc = Helpers.calculeazaExpirare(dataProd, catObj);
                 if (expCalc !== "Dată invalidă") {
                     FirebaseService.update('loturi', l.id, { dataProd, dataExp: expCalc });
+                    // COD NOU: Actualizează data produsului când se modifică data producției
+                    FirebaseService.update('produse_magazin', l.produsId, { dataUltimulLot: Date.now() });
                     onUpdate();
                 } else {
                     alert("Dată invalidă calculată!");
