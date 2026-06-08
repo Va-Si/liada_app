@@ -870,28 +870,34 @@
             if(newSect.nume) { FirebaseService.add('sectoare', { ...newSect, order: arrSectoare.length }); closeModal(); }
         };
 
-        return (
-            <div className="animate-fade-in pb-[100px]">
-                <FrozenHeader title="LIADA" bgColor={CONFIG.COLORS.LIADA_HEADER} actions={<div className="flex items-center gap-1"><ButtonIcon icon="fas fa-file-import text-white" onClick={() => fileInputRef.current?.click()} /><ButtonIcon icon="fas fa-file-export text-white" onClick={() => openModal(MODAL_TYPES.EXPORT_BACKUP)} /><ButtonIcon icon="fas fa-cog text-white" onClick={() => setView({page: PAGES.SETTINGS})} /></div>} nav={<React.Fragment></React.Fragment>} />
-                <input ref={fileInputRef} type="file" accept="application/json,.json" className="hidden" onChange={(e) => handleImportFile(e.target.files?.[0])} />
-                
-                {/* w-full face ca chenarele sectoarelor să aibă exact aceeași lățime/margini ca și headerul Freeze 'LIADA' */}
-                <div className="w-full" ref={containerRef}>
-                    {arrSectoare.length === 0 ? <div className="p-5 text-center text-text-sec font-medium">Nu există sectoare adăugate.</div> : null}
-                    {arrSectoare.map(s => (
-                        <Card key={s.id} onClick={() => setView({page: PAGES.SECTOR, data: s})} className="text-white !p-0 overflow-hidden !rounded-[25px] !shadow-md transition-transform" style={{backgroundColor: s.culoare || CONFIG.COLORS.DEFAULT_SECTOR}}>
-                            <div className="flex justify-between items-center p-[20px] font-black text-[1.2rem]">
-                                {s.nume}
-                                <ButtonIcon icon="fas fa-trash text-white" onClick={(e) => { e.stopPropagation(); confirmAction("Ștergere", "Ștergi sectorul, inclusiv toate magazinele și produsele sale?", () => FirebaseService.deleteSectorCascading(s.id)); }} />
-                            </div>
-                        </Card>
-                    ))}
-                </div>
+       return (
+            <>
+                <div className="animate-fade-in pb-[100px]">
+                    <FrozenHeader title="LIADA" bgColor={CONFIG.COLORS.LIADA_HEADER} actions={<div className="flex items-center gap-1"><ButtonIcon icon="fas fa-file-import text-white" onClick={() => fileInputRef.current?.click()} /><ButtonIcon icon="fas fa-file-export text-white" onClick={() => openModal(MODAL_TYPES.EXPORT_BACKUP)} /><ButtonIcon icon="fas fa-cog text-white" onClick={() => setView({page: PAGES.SETTINGS})} /></div>} nav={<React.Fragment></React.Fragment>} />
+                    <input ref={fileInputRef} type="file" accept="application/json,.json" className="hidden" onChange={(e) => handleImportFile(e.target.files?.[0])} />
+                    
+                    {/* w-full face ca chenarele sectoarelor să aibă exact aceeași lățime/margini ca și headerul Freeze 'LIADA' */}
+                    <div className="w-full" ref={containerRef}>
+                        {arrSectoare.length === 0 ? <div className="p-5 text-center text-text-sec font-medium">Nu există sectoare adăugate.</div> : null}
+                        {arrSectoare.map(s => (
+                            <Card key={s.id} onClick={() => setView({page: PAGES.SECTOR, data: s})} className="select-none text-white !p-0 overflow-hidden !rounded-[25px] !shadow-md transition-transform" style={{backgroundColor: s.culoare || CONFIG.COLORS.DEFAULT_SECTOR, WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none'}}>
+                                <div className="flex justify-between items-center p-[20px] font-black text-[1.2rem]">
+                                    {s.nume}
+                                    <ButtonIcon icon="fas fa-trash text-white" onClick={(e) => { e.stopPropagation(); confirmAction("Ștergere", "Ștergi sectorul, inclusiv toate magazinele și produsele sale?", () => FirebaseService.deleteSectorCascading(s.id)); }} />
+                                </div>
+                            </Card>
+                        ))}
+                    </div>
 
-                <ExpirariBox type="global" />
+                    <ExpirariBox type="global" />
+                </div> {/* <--- AICI SE ÎNCHIDE ANIMAȚIA */}
+
+
+                {/* ELEMENTE FIXE EXTRASE (Nu vor mai sări) */}
                 <FABSearch onClick={() => openModal(MODAL_TYPES.SEARCH)} />
                 <FAB onClick={() => { setNewSect({ nume: '', culoare: CONFIG.COLORS.DEFAULT_SECTOR }); openModal(MODAL_TYPES.ADD_SECTOR); }} />
 
+                {/* MODALUL EXTRAS (Pentru a nu fi afectat de animația paginii) */}
                 <BaseModal isOpen={modal.type === MODAL_TYPES.ADD_SECTOR} title="Adaugă Sector">
                     <Input placeholder="Denumire Sector" value={newSect.nume} onChange={e => setNewSect({...newSect, nume: e.target.value})} />
                     <Input type="color" value={newSect.culoare} onChange={e => setNewSect({...newSect, culoare: e.target.value})} className="!h-[50px] !p-[3px] cursor-pointer" />
@@ -900,7 +906,7 @@
                         <PrimaryButton onClick={handleSave}>Salvează</PrimaryButton>
                     </div>
                 </BaseModal>
-            </div>
+            </>
         );
     };
 
@@ -1715,7 +1721,7 @@
 
     // 3. Stilizare Corectată (Aici am schimbat API-ul)
     var cell = sheet.getRange(rowIdx + 1, colIdx + 1);
-    cell.clearFormat(); // Eliminăm vechile stiluri
+    //cell.clearFormat(); // Eliminăm vechile stiluri
     
     var valueStr = String(data.stocMan);
     var dateFullStr = " (" + data.dateStr + ")";
@@ -1742,6 +1748,9 @@
     } catch (errRich) {
       cell.setValue(fullText);
     }
+    // ADĂUGA aceste două linii aici pentru a forța centrarea pe orizontală și verticală:
+    cell.setHorizontalAlignment("center"); // Aliniere Centru (stânga-dreapta)
+    cell.setVerticalAlignment("middle");   // Centrare pe Mijloc (sus-jos)
 
     return ContentService.createTextOutput(JSON.stringify({success: true})).setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
@@ -1946,42 +1955,47 @@
             }
         }, [columns, magSect.length]);
 
-        return (
-            <div className="animate-fade-in pb-[100px]">
-                <FrozenHeader title={sector.nume} bgColor={sector.culoare || CONFIG.COLORS.DEFAULT_SECTOR} actions={
-                    <React.Fragment>
-                        <ButtonIcon icon="fas fa-pen text-white" onClick={()=>{ setEditSect({nume: sector.nume, culoare: sector.culoare || CONFIG.COLORS.DEFAULT_SECTOR}); openModal(MODAL_TYPES.EDIT_SECTOR); }}/>
-                        <ButtonIcon icon="fas fa-arrow-left text-white" onClick={()=>setView({page: PAGES.MAIN})}/>
-                        <ButtonIcon icon="fas fa-home text-white" onClick={()=>setView({page: PAGES.MAIN})}/>
-                    </React.Fragment>
-                } />
-                
-                {/* Selector 1/2 coloane */}
-                <div className="flex justify-between items-center px-4 mt-2">
-                    <div className="flex items-center gap-1.5 p-2 px-3 bg-surface-color dark:bg-dark-surface rounded-xl shadow-sm text-text-sec text-[0.85rem] font-bold">
-                        <i className="fas fa-store" style={{color: sector.culoare || '#2563eb'}}></i>
-                        <span>- {magSect.length} {magSect.length === 1 ? 'magazin' : 'magazine'}</span>
+       return (
+            <>
+                <div className="animate-fade-in pb-[100px]">
+                    <FrozenHeader title={sector.nume} bgColor={sector.culoare || CONFIG.COLORS.DEFAULT_SECTOR} actions={
+                        <React.Fragment>
+                            <ButtonIcon icon="fas fa-pen text-white" onClick={()=>{ setEditSect({nume: sector.nume, culoare: sector.culoare || CONFIG.COLORS.DEFAULT_SECTOR}); openModal(MODAL_TYPES.EDIT_SECTOR); }}/>
+                            <ButtonIcon icon="fas fa-arrow-left text-white" onClick={()=>setView({page: PAGES.MAIN})}/>
+                            <ButtonIcon icon="fas fa-home text-white" onClick={()=>setView({page: PAGES.MAIN})}/>
+                        </React.Fragment>
+                    } />
+                    
+                    {/* Selector 1/2 coloane */}
+                    <div className="flex justify-between items-center px-4 mt-2">
+                        <div className="flex items-center gap-1.5 p-2 px-3 bg-surface-color dark:bg-dark-surface rounded-xl shadow-sm text-text-sec text-[0.85rem] font-bold">
+                            <i className="fas fa-store" style={{color: sector.culoare || '#2563eb'}}></i>
+                            <span>- {magSect.length} {magSect.length === 1 ? 'magazin' : 'magazine'}</span>
+                        </div>
+                        <button onClick={() => { let c = columns === 1 ? 2 : 1; setColumns(c); localStorage.setItem('storeColumns', c); }} className="p-2 px-3 bg-surface-color dark:bg-dark-surface rounded-xl shadow-sm text-text-sec cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <i className={`fas ${columns === 1 ? 'fa-th-large' : 'fa-list'} text-[1.2rem]`}></i>
+                        </button>
                     </div>
-                    <button onClick={() => { let c = columns === 1 ? 2 : 1; setColumns(c); localStorage.setItem('storeColumns', c); }} className="p-2 px-3 bg-surface-color dark:bg-dark-surface rounded-xl shadow-sm text-text-sec cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                        <i className={`fas ${columns === 1 ? 'fa-th-large' : 'fa-list'} text-[1.2rem]`}></i>
-                    </button>
-                </div>
 
-                <div className={`p-4 pt-2 ${columns === 2 ? 'grid grid-cols-2 gap-3 mx-0 px-4' : 'flex flex-col gap-3'}`} ref={containerRef}>
-                    {magSect.length === 0 ? <div className="col-span-2 p-5 text-center text-text-sec font-medium">Nu există magazine.</div> : null}
-                    {magSect.map(m => (
-                        <Card key={m.id} onClick={()=>setView({page: PAGES.STORE, data: {magazin: m, sector: sector}})} className={`!mx-0 !my-0 cursor-pointer border-l-[8px] ${columns === 2 ? '!p-3' : '!pl-4'}`} style={{borderLeftColor: m.culoare || CONFIG.COLORS.DEFAULT_STORE}}>
-                            <div className={columns === 2 ? 'pr-[25px]' : 'pr-[40px]'}>
-                                <div className={`font-black leading-tight mb-1 ${columns === 2 ? 'text-[1.05rem]' : 'text-[1.2rem]'}`}>{m.nume}</div>
-                                <div className={`text-text-sec font-medium leading-tight ${columns === 2 ? 'text-[0.85rem]' : 'text-[0.95rem]'}`}>{m.adresa}</div>
-                            </div>
-                            <button className={`absolute top-1/2 -translate-y-1/2 bg-transparent border-none text-danger p-2 cursor-pointer hover:scale-110 transition-transform ${columns === 2 ? 'right-[5px] text-[1rem]' : 'right-[15px] text-[1.2rem]'}`} onClick={(e)=>{e.stopPropagation(); confirmAction("Ștergere", "Ștergi magazinul cu toate produsele și loturile sale?", ()=>FirebaseService.deleteStoreCascading(m.id));}}><i className="fas fa-trash"></i></button>
-                        </Card>
-                    ))}
-                </div>
+                    <div className={`p-4 pt-2 ${columns === 2 ? 'grid grid-cols-2 gap-3 mx-0 px-4' : 'flex flex-col gap-3'}`} ref={containerRef}>
+                        {magSect.length === 0 ? <div className="col-span-2 p-5 text-center text-text-sec font-medium">Nu există magazine.</div> : null}
+                         {/* chenarele la magazine */}
+                        {magSect.map(m => (
+                            <Card key={m.id} onClick={()=>setView({page: PAGES.STORE, data: {magazin: m, sector: sector}})} className={`select-none !mx-0 !my-0 cursor-pointer border-l-[24px] ${columns === 2 ? '!p-3' : '!pl-4'}`} style={{borderLeftColor: m.culoare || CONFIG.COLORS.DEFAULT_STORE, WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none'}}>
+                                <div className={columns === 2 ? 'pr-[25px]' : 'pr-[40px]'}>
+                                    <div className={`font-black leading-tight mb-1 ${columns === 2 ? 'text-[1.05rem]' : 'text-[1.2rem]'}`}>{m.nume}</div>
+                                    <div className={`text-text-sec font-medium leading-tight ${columns === 2 ? 'text-[0.85rem]' : 'text-[0.95rem]'}`}>{m.adresa}</div>
+                                </div>
+                                <button className={`absolute top-1/2 -translate-y-1/2 bg-transparent border-none text-danger p-2 cursor-pointer hover:scale-110 transition-transform ${columns === 2 ? 'right-[5px] text-[1rem]' : 'right-[15px] text-[1.2rem]'}`} onClick={(e)=>{e.stopPropagation(); confirmAction("Ștergere", "Ștergi magazinul cu toate produsele și loturile sale?", ()=>FirebaseService.deleteStoreCascading(m.id));}}><i className="fas fa-trash"></i></button>
+                            </Card>
+                        ))}
+                    </div>
 
-                <ExpirariBox type="sector" data={{currentSectorId: sector.id}} />
+                    <ExpirariBox type="sector" data={{currentSectorId: sector.id}} />
+                </div> {/* <--- AICI SE ÎNCHIDE ANIMAȚIA */}
                 
+
+                {/* ELEMENTE FIXE EXTRASE (Aici stau butoanele și ferestrele modale) */}
                 <FABSearch onClick={() => openModal(MODAL_TYPES.SEARCH)} />
                 <FAB onClick={() => { setNewMag({nume: '', adresa: '', retea: (reteleMagazine[0]?.nume || 'Local')}); openModal(MODAL_TYPES.ADD_STORE); }} />
 
@@ -2018,10 +2032,8 @@
                         }}>Salvează</PrimaryButton>
                     </div>
                 </BaseModal>
-            </div>
+            </>
         );
-    };
-
     const StorePhotosSection = ({ magazinId, confirmAction }) => {
         const [photos, setPhotos] = useState([]);
         const [loading, setLoading] = useState(true);
@@ -2271,81 +2283,85 @@
             }
         }, [modal.type, modal.data]);
 
-        return (
-            <div className="animate-fade-in pb-[100px]">
-                <FrozenHeader title={magazin.nume} subtitle={magazin.adresa} bgColor={magazin.culoare || CONFIG.COLORS.DEFAULT_STORE} actions={
-                    <React.Fragment>
-                        <ButtonIcon icon="fas fa-pen text-white" onClick={()=>{ setEditStore({nume: magazin.nume, adresa: magazin.adresa, retea: magazin.retea, sectorId: magazin.sectorId}); openModal(MODAL_TYPES.EDIT_STORE); }}/>
-                        <ButtonIcon icon="fas fa-arrow-left text-white" onClick={()=>setView({page: PAGES.SECTOR, data: sector})}/>
-                        <ButtonIcon icon="fas fa-home text-white" onClick={()=>setView({page: PAGES.MAIN})}/>
-                    </React.Fragment>
-                } />
-                
-                <Card>
-                    <div className="font-bold text-[1.1rem] mb-3">Detalii despre magazin</div>
-                    {proprietatiMagazine.map((p,i) => (
-                        <CardRow key={i}>
-                            <span>{p}:</span> 
-                            <Input 
-                                placeholder={`${p}...`} 
-                                className="!w-[60%] !mt-0 !p-2" 
-                                value={propVals[p] || ''} 
-                                onChange={(e) => setPropVals(prev => ({...prev, [p]: e.target.value}))}
-                                onBlur={() => FirebaseService.update('magazine', magazin.id, { proprietati: propVals })}
-                            />
-                        </CardRow>
-                    ))}
-                </Card>
+       return (
+            <>
+                <div className="animate-fade-in pb-[100px]">
+                    <FrozenHeader title={magazin.nume} subtitle={magazin.adresa} bgColor={magazin.culoare || CONFIG.COLORS.DEFAULT_STORE} actions={
+                        <React.Fragment>
+                            <ButtonIcon icon="fas fa-pen text-white" onClick={()=>{ setEditStore({nume: magazin.nume, adresa: magazin.adresa, retea: magazin.retea, sectorId: magazin.sectorId}); openModal(MODAL_TYPES.EDIT_STORE); }}/>
+                            <ButtonIcon icon="fas fa-arrow-left text-white" onClick={()=>setView({page: PAGES.SECTOR, data: sector})}/>
+                            <ButtonIcon icon="fas fa-home text-white" onClick={()=>setView({page: PAGES.MAIN})}/>
+                        </React.Fragment>
+                    } />
+                    
+                    <Card>
+                        <div className="font-bold text-[1.1rem] mb-3">Detalii despre magazin</div>
+                        {proprietatiMagazine.map((p,i) => (
+                            <CardRow key={i}>
+                                <span>{p}:</span> 
+                                <Input 
+                                    placeholder={`${p}...`} 
+                                    className="!w-[60%] !mt-0 !p-2" 
+                                    value={propVals[p] || ''} 
+                                    onChange={(e) => setPropVals(prev => ({...prev, [p]: e.target.value}))}
+                                    onBlur={() => FirebaseService.update('magazine', magazin.id, { proprietati: propVals })}
+                                />
+                            </CardRow>
+                        ))}
+                    </Card>
 
-                <StorePhotosSection magazinId={magazin.id} confirmAction={confirmAction} />
+                    <StorePhotosSection magazinId={magazin.id} confirmAction={confirmAction} />
 
-                <div>
-                    {/* Sortează și afișează categoriile conform ordinii dorite */}
-                    {Object.entries(prodGrupate).sort(([catA], [catB]) => {
-                        const orderA = catalogCategorii[catA]?.order !== undefined ? catalogCategorii[catA].order : PREFERRED_CAT_ORDER.indexOf(catA);
-                        const orderB = catalogCategorii[catB]?.order !== undefined ? catalogCategorii[catB].order : PREFERRED_CAT_ORDER.indexOf(catB);
-                        const indA = orderA === -1 ? 999 : orderA;
-                        const indB = orderB === -1 ? 999 : orderB;
-                        return indA - indB;
-                    }).map(([cat, produse]) => {
-                        const isDeschis = openCats[cat] !== undefined ? openCats[cat] : produse.length > 0;
-                        return (
-                            <Card key={cat} className="!p-0 overflow-hidden">
-                                <div className="flex justify-between items-center font-black text-[1.1rem] cursor-pointer p-5 bg-gray-50 dark:bg-gray-800/50" onClick={()=>toggleCat(cat)}>
-                                    {cat}
-                                    <div className="flex items-center gap-[15px]">
-                                        <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-100 dark:!bg-blue-900/50 !rounded-full !p-[6px_8px] !text-[0.9rem]" onClick={(e)=>{e.stopPropagation(); setNewProdState({cat: cat, nume: ''}); openModal(MODAL_TYPES.ADD_PRODUCT, {cat: cat, nume: ''});}} />
-                                        <i className={`fas fa-chevron-down text-border-color transition-transform ${isDeschis ? 'rotate-0' : 'rotate-90'}`}></i>
+                    <div>
+                        {/* Sortează și afișează categoriile conform ordinii dorite */}
+                        {Object.entries(prodGrupate).sort(([catA], [catB]) => {
+                            const orderA = catalogCategorii[catA]?.order !== undefined ? catalogCategorii[catA].order : PREFERRED_CAT_ORDER.indexOf(catA);
+                            const orderB = catalogCategorii[catB]?.order !== undefined ? catalogCategorii[catB].order : PREFERRED_CAT_ORDER.indexOf(catB);
+                            const indA = orderA === -1 ? 999 : orderA;
+                            const indB = orderB === -1 ? 999 : orderB;
+                            return indA - indB;
+                        }).map(([cat, produse]) => {
+                            const isDeschis = openCats[cat] !== undefined ? openCats[cat] : produse.length > 0;
+                            return (
+                                <Card key={cat} className="!p-0 overflow-hidden">
+                                    <div className="flex justify-between items-center font-black text-[1.1rem] cursor-pointer p-5 bg-gray-50 dark:bg-gray-800/50" onClick={()=>toggleCat(cat)}>
+                                        {cat}
+                                        <div className="flex items-center gap-[15px]">
+                                            <ButtonIcon icon="fas fa-plus" className="!text-accent !bg-blue-100 dark:!bg-blue-900/50 !rounded-full !p-[6px_8px] !text-[0.9rem]" onClick={(e)=>{e.stopPropagation(); setNewProdState({cat: cat, nume: ''}); openModal(MODAL_TYPES.ADD_PRODUCT, {cat: cat, nume: ''});}} />
+                                            <i className={`fas fa-chevron-down text-border-color transition-transform ${isDeschis ? 'rotate-0' : 'rotate-90'}`}></i>
+                                        </div>
                                     </div>
-                                </div>
-                                <div style={{display: isDeschis ? 'block' : 'none'}}>
-                                    {produse.length === 0 ? <div className="text-center text-text-sec text-[0.9rem] p-5 font-medium border-t border-border-color dark:border-dark-border">Niciun produs adăugat.</div> : null}
-                                    {produse.map((p, idx) => (
-                                        <div key={p.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" onClick={()=>setView({page: PAGES.PRODUCT, data: { id: p.id, nume: p.nume, categorie: cat, magazinCuloare: magazin.culoare, magazinNume: magazin.nume, magazinAdresa: magazin.adresa, backData: {magazin: magazin, sector: sector} }})}>
-                                            <div className={`flex justify-between items-center py-3 mx-5 ${idx > 0 ? 'border-t-2 border-gray-200 dark:border-gray-700' : 'border-t-2 border-transparent'}`}>
-                                                <span className="font-bold text-[1.05rem] flex items-center gap-2">
-                                                    {p.nume}
-                                                    <ButtonIcon 
-                                                        icon="fas fa-barcode text-accent" 
-                                                        className="!text-[0.95rem] !p-1" 
-                                                        onClick={(e)=>{e.stopPropagation(); openModal(MODAL_TYPES.PRODUCT_IMAGE, { catName: p.categorie, prodName: p.nume });}} 
-                                                    />
-                                                </span>
-                                                <div className="flex items-center">
-                                                    <ButtonDanger icon="fas fa-trash" className="mr-[10px] !text-[1.1rem]" onClick={(e)=>{e.stopPropagation(); confirmAction("Șterge","Ștergi produsul cu toate loturile sale?", ()=>FirebaseService.deleteProductCascading(p.id));}} />
-                                                    <i className="fas fa-chevron-right text-border-color"></i>
+                                    <div style={{display: isDeschis ? 'block' : 'none'}}>
+                                        {produse.length === 0 ? <div className="text-center text-text-sec text-[0.9rem] p-5 font-medium border-t border-border-color dark:border-dark-border">Niciun produs adăugat.</div> : null}
+                                        {produse.map((p, idx) => (
+                                            <div key={p.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" onClick={()=>setView({page: PAGES.PRODUCT, data: { id: p.id, nume: p.nume, categorie: cat, magazinCuloare: magazin.culoare, magazinNume: magazin.nume, magazinAdresa: magazin.adresa, backData: {magazin: magazin, sector: sector} }})}>
+                                                <div className={`flex justify-between items-center py-3 mx-5 ${idx > 0 ? 'border-t-2 border-gray-200 dark:border-gray-700' : 'border-t-2 border-transparent'}`}>
+                                                    <span className="font-bold text-[1.05rem] flex items-center gap-2">
+                                                        {p.nume}
+                                                        <ButtonIcon 
+                                                            icon="fas fa-barcode text-accent" 
+                                                            className="!text-[0.95rem] !p-1" 
+                                                            onClick={(e)=>{e.stopPropagation(); openModal(MODAL_TYPES.PRODUCT_IMAGE, { catName: p.categorie, prodName: p.nume });}} 
+                                                        />
+                                                    </span>
+                                                    <div className="flex items-center">
+                                                        <ButtonDanger icon="fas fa-trash" className="mr-[10px] !text-[1.1rem]" onClick={(e)=>{e.stopPropagation(); confirmAction("Șterge","Ștergi produsul cu toate loturile sale?", ()=>FirebaseService.deleteProductCascading(p.id));}} />
+                                                        <i className="fas fa-chevron-right text-border-color"></i>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </Card>
-                        );
-                    })}
-                </div>
+                                        ))}
+                                    </div>
+                                </Card>
+                            );
+                        })}
+                    </div>
 
-                <ExpirariBox type="store" data={{currentStoreId: magazin.id}} />
+                    <ExpirariBox type="store" data={{currentStoreId: magazin.id}} />
+                </div> {/* <--- AICI SE ÎNCHIDE ANIMAȚIA */}
 
+
+                {/* ELEMENTE FIXE EXTRASE (Butonul Lupa și Ferestrele Modale) */}
                 <FABSearch onClick={() => openModal(MODAL_TYPES.SEARCH)} />
 
                 <BaseModal isOpen={modal.type === MODAL_TYPES.ADD_PRODUCT} title={`Adaugă în: ${newProdState.cat}`}>
@@ -2502,7 +2518,7 @@
                         }}>Salvează</PrimaryButton>
                     </div>
                 </BaseModal>
-            </div>
+            </>
         );
     };
 
