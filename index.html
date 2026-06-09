@@ -1981,7 +1981,7 @@
                         {magSect.length === 0 ? <div className="col-span-2 p-5 text-center text-text-sec font-medium">Nu există magazine.</div> : null}
                          {/* chenarele la magazine */}
                         {magSect.map(m => (
-                            <Card key={m.id} onClick={()=>setView({page: PAGES.STORE, data: {magazin: m, sector: sector}})} className={`select-none !mx-0 !my-0 cursor-pointer border-l-[12px] ${columns === 2 ? '!p-3' : '!pl-4'}`} style={{borderLeftColor: m.culoare || CONFIG.COLORS.DEFAULT_STORE, WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none'}}>
+                            <Card key={m.id} onClick={()=>setView({page: PAGES.STORE, data: {magazin: m, sector: sector}})} className={`select-none !mx-0 !my-0 cursor-pointer border-t-[12px] ${columns === 2 ? '!p-3' : '!pl-4'}`} style={{borderTopColor: m.culoare || CONFIG.COLORS.DEFAULT_STORE, WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none'}}>
                                 <div className={columns === 2 ? 'pr-[25px]' : 'pr-[40px]'}>
                                     <div className={`font-black leading-tight mb-1 ${columns === 2 ? 'text-[1.05rem]' : 'text-[1.2rem]'}`}>{m.nume}</div>
                                     <div className={`text-text-sec font-medium leading-tight ${columns === 2 ? 'text-[0.85rem]' : 'text-[0.95rem]'}`}>{m.adresa}</div>
